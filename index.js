@@ -66,6 +66,17 @@ async function main() {
   });
 
   io.on('connection', async (socket) => {
+    socket.on('set nickname', (nickname, callback) => {
+  socket.nickname = nickname || '익명';
+
+  io.emit('system message', `[${socket.nickname}] 님이 접속했습니다.`);
+
+  // 클라이언트가 retries 옵션을 쓰고 있으므로 ack 응답을 해줘야 함.
+  if (callback) {
+    callback();
+  }
+});
+
     socket.on('chat message', async (nickname, msg, clientOffset, callback) => {
       let result;
 
@@ -95,6 +106,12 @@ async function main() {
         callback();
       }
     });
+
+    socket.on('disconnect', () => {
+    if (socket.nickname) {
+      io.emit('system message', `[${socket.nickname}] 님이 퇴장했습니다.`);
+    }
+  });
 
     if (!socket.recovered) {
       try {

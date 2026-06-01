@@ -91,6 +91,10 @@
           }
         });
 
+        socket.emit('set nickname', nickname, () => {
+  console.log('nickname registered');
+});
+
         socket.on('chat message', (nickname, msg, serverOffset) => {
           const item = document.createElement('li');
 
@@ -102,6 +106,15 @@
           window.scrollTo(0, document.body.scrollHeight);
 
           socket.auth.serverOffset = serverOffset;
+        });
+
+        socket.on('system message', (msg) => {
+          const item = document.createElement('li');
+          item.textContent = msg;
+          item.style.color = '#777';
+          item.style.textAlign = 'center';
+          messages.appendChild(item);
+          window.scrollTo(0, document.body.scrollHeight);
         });
       }
 
@@ -125,7 +138,9 @@
 
           // 기존에는 input.value, clientOffset만 보냈음.
           // 이제 nickname, input.value, clientOffset 순서로 보냄.
-          socket.emit('chat message', nickname, input.value, clientOffset);
+          socket.emit('chat message', nickname, input.value, clientOffset, () => {
+            input.value = '';
+          });
 
           input.value = '';
         }
