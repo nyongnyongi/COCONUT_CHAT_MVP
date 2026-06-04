@@ -2,210 +2,146 @@ const express = require('express');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
 const { Server } = require('socket.io');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const { availableParallelism } = require('node:os');
-const cluster = require('node:cluster');
-const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
+const { Pool } = require('pg');
 
-if (cluster.isPrimary) {
-  const numCPUs = availableParallelism();
-
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({
-      PORT: 3000 + i
-    });
-  }
-
-  return setupPrimary();
+// 변경: 로컬에서 .env 파일을 쓸 수 있게 함.
+// 배포 환경(Render 등)에서는 환경변수로 DATABASE_URL을 넣으면 됨.
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
 }
 
-async function main() {
-  const db = await open({
-    filename: 'chat.db',
-    driver: sqlite3.Database
-  });
+const app = express();
+const server = createServer(app);
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_offset TEXT UNIQUE,
-      content TEXT
-    );
-  `);
-
-
-  // 기존 chat.db에는 nickname 컬럼이 없을 수 있음.
-  // cluster에서는 여러 worker가 동시에 실행되므로 ALTER TABLE 에러를 안전하게 처리함.
-  const columns = await db.all('PRAGMA table_info(messages)');
-  const hasNicknameColumn = columns.some((column) => column.name === 'nickname');
-
-  if (!hasNicknameColumn) {
-    try {
-      await db.exec('ALTER TABLE messages ADD COLUMN nickname TEXT');
-    } catch (e) {
-      // 다른 worker가 먼저 nickname 컬럼을 추가했을 수 있음.
-      if (!String(e.message).includes('duplicate column name')) {
-        throw e;
-      }
-    }
-  }
-
-  await db.exec('DELETE FROM messages');
-
-  const app = express();
-  const server = createServer(app);
-
-  const io = new Server(server, {
-    connectionStateRecovery: {},
-    adapter: createAdapter()
-  });
-
-  app.get('/', (req, res) => {
-    res.sendFile(join(__dirname, 'index.html'));
-  });
-
-  io.on('connection', async (socket) => {
-    socket.on('set nickname', (nickname, callback) => {
-  socket.nickname = nickname || '익명';
-
-  io.emit('system message', `[${socket.nickname}] 님이 접속했습니다.`);
-
-  // 클라이언트가 retries 옵션을 쓰고 있으므로 ack 응답을 해줘야 함.
-  if (callback) {
-    callback();
-  }
+// 변경: SQLite 대신 Postgres 연결.
+// DATABASE_URL은 Supabase/Render 환경변수에 넣는 값.
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.NODE_ENV === 'production'
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-    socket.on('chat message', async (nickname, msg, clientOffset, callback) => {
-      let result;
+const io = new Server(server, {
+  connectionStateRecovery: {}
+});
 
-      try {
-        // 기존에는 content만 저장했음.
-        // 닉네임을 같이 보여주려면 DB에도 nickname을 저장해야 함.
-        result = await db.run(
-          'INSERT INTO messages (nickname, content, client_offset) VALUES (?, ?, ?)',
-          nickname,
-          msg,
-          clientOffset
-        );
-      } catch (e) {
-        if (e.errno === 19) {
-          if (callback) callback();
-        } else {
-          console.error(e);
-        }
+async function initDb() {
+  // 변경: 메시지를 Postgres messages 테이블에 저장.
+  // nickname은 “회원 계정”이 아니라 메시지에 붙는 표시 이름.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id BIGSERIAL PRIMARY KEY,
+      client_offset TEXT UNIQUE,
+      nickname TEXT,
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
+    );
+  `);
+}
 
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
+});
+
+io.on('connection', async (socket) => {
+  socket.on('set nickname', (nickname, callback) => {
+    // 변경: 서버에서도 닉네임을 정리하고 길이를 제한.
+    socket.nickname = String(nickname || '익명').trim().slice(0, 20) || '익명';
+
+    io.emit('system message', `[${socket.nickname}] 님이 접속했습니다.`);
+
+    // 변경: 클라이언트 retries 옵션 때문에 ack 응답을 보냄.
+    callback?.();
+  });
+
+  socket.on('chat message', async (nickname, msg, clientOffset, callback) => {
+    // 변경: 클라이언트 값은 믿지 않고 서버에서 한 번 더 정리.
+    const safeNickname = String(nickname || socket.nickname || '익명')
+      .trim()
+      .slice(0, 20) || '익명';
+
+    const safeMsg = String(msg || '').trim().slice(0, 500);
+
+    if (!safeMsg) {
+      callback?.();
+      return;
+    }
+
+    try {
+      const result = await pool.query(
+        `
+        INSERT INTO messages (nickname, content, client_offset)
+        VALUES ($1, $2, $3)
+        RETURNING id
+        `,
+        [safeNickname, safeMsg, clientOffset]
+      );
+
+      io.emit('chat message', safeNickname, safeMsg, result.rows[0].id);
+      callback?.();
+    } catch (e) {
+      // 변경: client_offset UNIQUE 중복이면 이미 처리된 메시지라 ack만 보냄.
+      if (e.code === '23505') {
+        callback?.();
         return;
       }
 
-      // 클라이언트가 nickname, msg, serverOffset 순서로 받게 보냄.
-      io.emit('chat message', nickname, msg, result.lastID);
+      console.error(e);
+    }
+  });
 
-      if (callback) {
-        callback();
-      }
-    });
-
-    socket.on('disconnect', () => {
+  socket.on('disconnect', () => {
     if (socket.nickname) {
       io.emit('system message', `[${socket.nickname}] 님이 퇴장했습니다.`);
     }
   });
 
-    if (!socket.recovered) {
-      try {
-        await db.each(
-          'SELECT id, nickname, content FROM messages WHERE id > ?',
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit(
-              'chat message',
-              row.nickname || '익명',
-              row.content,
-              row.id
-            );
-          }
-        );
-      } catch (e) {
-        console.error(e);
-      }
-    }
-  });
+  // 변경: 연결 복구가 안 된 경우, 마지막으로 받은 메시지 이후 기록을 다시 보내줌.
+  if (!socket.recovered) {
+    try {
+      const serverOffset = Number(socket.handshake.auth.serverOffset || 0);
 
-  const port = process.env.PORT;
+      const result = await pool.query(
+        `
+        SELECT id, nickname, content
+        FROM messages
+        WHERE id > $1
+        ORDER BY id ASC
+        `,
+        [serverOffset]
+      );
+
+      for (const row of result.rows) {
+        socket.emit(
+          'chat message',
+          row.nickname || '익명',
+          row.content,
+          row.id
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+});
+
+async function main() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL 환경변수가 필요합니다.');
+  }
+
+  await initDb();
+
+  // 변경: 배포 플랫폼은 process.env.PORT 하나만 사용.
+  const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
-    console.log(`server running at http://localhost:${port}`);
+    console.log(`server running on port ${port}`);
   });
 }
 
-main();
-
-/*io.on('connection', (socket) => {
-    console.log('a user connected');
-    socket.on('disconnect', () => {
-        console.log('user disconnected');
-    });
-});*/
-
-/*io.on('connection', (socket) => {
-    socket.on('chat message', (msg) => {
-        console.log('message: ' + msg);
-    });
-});*/
-
-/*io.on('connection', (socket) => {
-    socket.on('chat message', (msg) => {
-        io.emit('chat message', msg);
-    });
-});*/
-
-
-/*socket.emit('hello', 'world');
-//emit은 이벤트를 보낸다는 뜻: '서버야,hello라는 이벤트를 보낼게. 데이터는 "world" 야.'
-io.on('connection', (socket) => {
-    socket.on('hello', (arg) => {
-        //누가 "hello" 이벤트를 보내면 실행
-        console.log(arg);
-    });
-});*/
-
-/*socket.emit('join', '시우');
-socket.emit('message', '안녕하세요');
-socket.emit('leave', '시우');
-
-socket.on('join', (name) => {
-    console.log('입장:', name);
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
 });
-
-socket.on('message', (msg) => {
-    console.log('메시지:', msg);
-});
-
-socket.on('leave', (leave) => {
-    console.log('이름:', leave);
-})*/ 
-
-//이런 식으로 socket. on 을 써버리면 각각의 이벤트에 대해 하나씩 만들어야 한다. 
-
-/*socket.onAny((event, ...args) => {
-    console.log('이벤트:', event);
-    console.log('데이터:', args);
-});
-
-socket.emit('join', '시우');
-socket.emit('message', '안녕하세요');
-socket.emit('leave', '시우');*/
-
-//onAny를 쓰면 모든 이벤트에 대하여 동일한 서식을 적용한다. 
-
-/*io.on('connection', (socket) => {
-    socket.join('some room');
-
-    io.to('some room').emit('hello', 'world');
-
-    io.except('some room').emit('hello', 'world');
-
-    socket.leave('some room');
-});*/

@@ -4,7 +4,11 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0">
     <title>Socket.IO chat</title>
     <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      body {
+        margin: 0;
+        padding-bottom: 3rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
 
       #nickname-screen {
         position: fixed;
@@ -37,20 +41,67 @@
         font-size: 1rem;
       }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+      #form {
+        background: rgba(0, 0, 0, 0.15);
+        padding: 0.25rem;
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        display: flex;
+        height: 3rem;
+        box-sizing: border-box;
+        backdrop-filter: blur(10px);
+      }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+      #input {
+        border: none;
+        padding: 0 1rem;
+        flex-grow: 1;
+        border-radius: 2rem;
+        margin: 0.25rem;
+      }
+
+      #input:focus {
+        outline: none;
+      }
+
+      #form > button {
+        background: #333;
+        border: none;
+        padding: 0 1rem;
+        margin: 0.25rem;
+        border-radius: 3px;
+        outline: none;
+        color: #fff;
+      }
+
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      #messages > li {
+        padding: 0.5rem 1rem;
+      }
+
+      #messages > li:nth-child(odd) {
+        background: #efefef;
+      }
+
+      .system-message {
+        color: #777;
+        text-align: center;
+      }
     </style>
   </head>
   <body>
+    <!-- 변경: prompt 대신 직접 만든 닉네임 입력 화면 사용 -->
     <div id="nickname-screen">
       <div id="nickname-box">
-        <input id="nickname-input" autocomplete="off" placeholder="닉네임" />
+        <!-- 변경: maxlength로 클라이언트에서도 닉네임 길이 제한 -->
+        <input id="nickname-input" autocomplete="off" placeholder="닉네임" maxlength="20" />
         <button id="nickname-button">시작</button>
       </div>
     </div>
@@ -58,7 +109,8 @@
     <ul id="messages"></ul>
 
     <form id="form" action="">
-      <input id="input" autocomplete="off" />
+      <!-- 변경: maxlength로 메시지 길이 제한 -->
+      <input id="input" autocomplete="off" maxlength="500" />
       <button>Send</button>
     </form>
 
@@ -68,6 +120,9 @@
       let nickname = '익명';
       let socket;
 
+      // 변경: 시작 버튼/Enter 연타로 socket이 여러 개 생기는 것을 방지.
+      let started = false;
+
       const nicknameScreen = document.getElementById('nickname-screen');
       const nicknameInput = document.getElementById('nickname-input');
       const nicknameButton = document.getElementById('nickname-button');
@@ -76,13 +131,31 @@
       const input = document.getElementById('input');
       const messages = document.getElementById('messages');
 
-      function startChat() {
-        nickname = nicknameInput.value.trim() || '익명';
+      function appendMessage(text, className) {
+        const item = document.createElement('li');
 
-        // prompt가 안 뜨는 문제를 피하기 위해 직접 만든 닉네임 입력 화면을 숨김.
+        // 변경: innerHTML 대신 textContent 사용.
+        // 사용자가 <script> 같은 값을 보내도 HTML로 실행되지 않음.
+        item.textContent = text;
+
+        if (className) {
+          item.className = className;
+        }
+
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+
+      function startChat() {
+        if (started) return;
+        started = true;
+
+        // 변경: 닉네임 공백 제거 + 빈 값이면 익명 + 최대 20자 제한.
+        nickname = nicknameInput.value.trim().slice(0, 20) || '익명';
+
         nicknameScreen.style.display = 'none';
 
-        // 닉네임이 정해진 뒤에 Socket.IO 연결을 시작함.
+        // 변경: 닉네임이 정해진 뒤 Socket.IO 연결 시작.
         socket = io({
           ackTimeout: 10000,
           retries: 3,
@@ -92,29 +165,18 @@
         });
 
         socket.emit('set nickname', nickname, () => {
-  console.log('nickname registered');
-});
+          console.log('nickname registered');
+        });
 
         socket.on('chat message', (nickname, msg, serverOffset) => {
-          const item = document.createElement('li');
+          appendMessage(`[${nickname}] ${msg}`);
 
-          // 기존에는 msg만 출력했음.
-          // 이제 서버에서 받은 nickname과 msg를 같이 출력함.
-          item.textContent = `[${nickname}] ${msg}`;
-
-          messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight);
-
+          // 변경: 마지막으로 받은 서버 메시지 id를 저장해서 재연결 시 누락분을 받음.
           socket.auth.serverOffset = serverOffset;
         });
 
         socket.on('system message', (msg) => {
-          const item = document.createElement('li');
-          item.textContent = msg;
-          item.style.color = '#777';
-          item.style.textAlign = 'center';
-          messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight);
+          appendMessage(msg, 'system-message');
         });
       }
 
@@ -129,21 +191,18 @@
       form.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        if (!socket) {
-          return;
-        }
+        if (!socket) return;
 
-        if (input.value) {
-          const clientOffset = `${socket.id}-${counter++}`;
+        // 변경: 메시지 공백 제거 + 빈 메시지 전송 방지 + 최대 500자 제한.
+        const msg = input.value.trim().slice(0, 500);
 
-          // 기존에는 input.value, clientOffset만 보냈음.
-          // 이제 nickname, input.value, clientOffset 순서로 보냄.
-          socket.emit('chat message', nickname, input.value, clientOffset, () => {
-            input.value = '';
-          });
+        if (!msg) return;
 
+        const clientOffset = `${socket.id}-${counter++}`;
+
+        socket.emit('chat message', nickname, msg, clientOffset, () => {
           input.value = '';
-        }
+        });
       });
     </script>
   </body>
