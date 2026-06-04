@@ -40,6 +40,8 @@ async function initDb() {
   `);
 }
 
+app.use(express.static(__dirname));
+
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
