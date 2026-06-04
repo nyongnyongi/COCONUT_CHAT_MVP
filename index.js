@@ -1,11 +1,11 @@
 const express = require('express');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
+const crypto = require('node:crypto');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
-// 변경: 로컬에서 .env 파일을 쓸 수 있게 함.
-// 배포 환경(Render 등)에서는 환경변수로 DATABASE_URL을 넣으면 됨.
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
 }
@@ -13,56 +13,270 @@ if (process.env.NODE_ENV !== 'production') {
 const app = express();
 const server = createServer(app);
 
-// 변경: SQLite 대신 Postgres 연결.
-// DATABASE_URL은 Supabase/Render 환경변수에 넣는 값.
+app.use(express.json());
+app.use(express.static(__dirname));
+
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production'
-    ? { rejectUnauthorized: false }
-    : false
+  ssl: { rejectUnauthorized: false }
 });
 
-const io = new Server(server, {
-  connectionStateRecovery: {}
-});
+const io = new Server(server);
+
+function getTokenSecret() {
+  return process.env.SESSION_SECRET || process.env.DATABASE_URL;
+}
+
+function normalizeUsername(username) {
+  return String(username || '').trim().slice(0, 30);
+}
+
+function normalizePassword(password) {
+  return String(password || '');
+}
+
+function encodePayload(payload) {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodePayload(payloadBase64) {
+  return JSON.parse(Buffer.from(payloadBase64, 'base64url').toString('utf8'));
+}
+
+function signPayload(payloadBase64) {
+  return crypto
+    .createHmac('sha256', getTokenSecret())
+    .update(payloadBase64)
+    .digest('base64url');
+}
+
+function createToken(user) {
+  const payloadBase64 = encodePayload({
+    id: user.id,
+    username: user.username,
+    createdAt: Date.now()
+  });
+
+  const signature = signPayload(payloadBase64);
+
+  return `${payloadBase64}.${signature}`;
+}
+
+function verifyToken(token) {
+  try {
+    if (!token || typeof token !== 'string') {
+      return null;
+    }
+
+    const [payloadBase64, signature] = token.split('.');
+
+    if (!payloadBase64 || !signature) {
+      return null;
+    }
+
+    const expectedSignature = signPayload(payloadBase64);
+
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      return null;
+    }
+
+    const signatureOk = crypto.timingSafeEqual(
+      signatureBuffer,
+      expectedBuffer
+    );
+
+    if (!signatureOk) {
+      return null;
+    }
+
+    const payload = decodePayload(payloadBase64);
+
+    if (!payload.id || !payload.username) {
+      return null;
+    }
+
+    return {
+      id: payload.id,
+      username: payload.username
+    };
+  } catch (e) {
+    return null;
+  }
+}
 
 async function initDb() {
-  // 변경: 메시지를 Postgres messages 테이블에 저장.
-  // nickname은 “회원 계정”이 아니라 메시지에 붙는 표시 이름.
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS messages (
+    CREATE TABLE IF NOT EXISTS users (
       id BIGSERIAL PRIMARY KEY,
-      client_offset TEXT UNIQUE,
-      nickname TEXT,
-      content TEXT NOT NULL,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 }
 
-app.use(express.static(__dirname));
+function getOnlineCount() {
+  let count = 0;
+
+  for (const socket of io.sockets.sockets.values()) {
+    if (socket.user) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function emitOnlineCount() {
+  io.emit('online count', getOnlineCount());
+}
 
 app.get('/', (req, res) => {
   res.sendFile(join(__dirname, 'index.html'));
 });
 
-io.on('connection', async (socket) => {
-  socket.on('set nickname', (nickname, callback) => {
-    // 변경: 서버에서도 닉네임을 정리하고 길이를 제한.
-    socket.nickname = String(nickname || '익명').trim().slice(0, 20) || '익명';
+app.post('/api/signup', async (req, res) => {
+  const username = normalizeUsername(req.body.username);
+  const password = normalizePassword(req.body.password);
 
-    io.emit('system message', `[${socket.nickname}] 님이 접속했습니다.`);
+  if (!username || password.length < 6) {
+    return res.status(400).json({
+      message: '아이디와 6자 이상 비밀번호가 필요합니다.'
+    });
+  }
 
-    // 변경: 클라이언트 retries 옵션 때문에 ack 응답을 보냄.
-    callback?.();
-  });
+  try {
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
 
-  socket.on('chat message', async (nickname, msg, clientOffset, callback) => {
-    // 변경: 클라이언트 값은 믿지 않고 서버에서 한 번 더 정리.
-    const safeNickname = String(nickname || socket.nickname || '익명')
-      .trim()
-      .slice(0, 20) || '익명';
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        message: '이미 사용 중인 아이디입니다.'
+      });
+    }
 
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const result = await pool.query(
+      `
+      INSERT INTO users (username, password_hash)
+      VALUES ($1, $2)
+      RETURNING id, username
+      `,
+      [username, passwordHash]
+    );
+
+    return res.status(201).json({
+      message: '회원가입 완료',
+      user: result.rows[0]
+    });
+  } catch (e) {
+    console.error('signup error:', e);
+
+    if (e.code === '23505') {
+      return res.status(409).json({
+        message: '이미 사용 중인 아이디입니다.'
+      });
+    }
+
+    return res.status(500).json({
+      message: '회원가입 실패'
+    });
+  }
+});
+
+app.post('/api/login', async (req, res) => {
+  const username = normalizeUsername(req.body.username);
+  const password = normalizePassword(req.body.password);
+
+  if (!username || password.length < 6) {
+    return res.status(400).json({
+      message: '아이디와 6자 이상 비밀번호가 필요합니다.'
+    });
+  }
+
+  try {
+    const result = await pool.query(
+      'SELECT id, username, password_hash FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        message: '아이디 또는 비밀번호가 틀렸습니다.'
+      });
+    }
+
+    const user = result.rows[0];
+    const passwordOk = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordOk) {
+      return res.status(401).json({
+        message: '아이디 또는 비밀번호가 틀렸습니다.'
+      });
+    }
+
+    const token = createToken(user);
+
+    return res.json({
+      user: {
+        id: user.id,
+        username: user.username
+      },
+      token
+    });
+  } catch (e) {
+    console.error('login error:', e);
+
+    return res.status(500).json({
+      message: '로그인 실패'
+    });
+  }
+});
+
+app.get('/api/debug-users', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT id, username, created_at
+      FROM users
+      ORDER BY id DESC
+      LIMIT 20
+    `);
+
+    return res.json(result.rows);
+  } catch (e) {
+    console.error('debug users error:', e);
+
+    return res.status(500).json({
+      message: '사용자 조회 실패'
+    });
+  }
+});
+
+io.on('connection', (socket) => {
+  const user = verifyToken(socket.handshake.auth.token);
+
+  if (!user) {
+    socket.emit('auth error', '로그인이 필요합니다.');
+    socket.disconnect();
+    return;
+  }
+
+  socket.user = user;
+
+  io.emit('system message', `[${user.username}] 님이 접속했습니다.`);
+  emitOnlineCount();
+
+  socket.on('chat message', (msg, callback) => {
     const safeMsg = String(msg || '').trim().slice(0, 500);
 
     if (!safeMsg) {
@@ -70,72 +284,26 @@ io.on('connection', async (socket) => {
       return;
     }
 
-    try {
-      const result = await pool.query(
-        `
-        INSERT INTO messages (nickname, content, client_offset)
-        VALUES ($1, $2, $3)
-        RETURNING id
-        `,
-        [safeNickname, safeMsg, clientOffset]
-      );
+    io.emit('chat message', socket.user.username, safeMsg);
 
-      io.emit('chat message', safeNickname, safeMsg, result.rows[0].id);
-      callback?.();
-    } catch (e) {
-      // 변경: client_offset UNIQUE 중복이면 이미 처리된 메시지라 ack만 보냄.
-      if (e.code === '23505') {
-        callback?.();
-        return;
-      }
-
-      console.error(e);
-    }
+    callback?.();
   });
 
   socket.on('disconnect', () => {
-    if (socket.nickname) {
-      io.emit('system message', `[${socket.nickname}] 님이 퇴장했습니다.`);
+    if (socket.user) {
+      io.emit('system message', `[${socket.user.username}] 님이 퇴장했습니다.`);
+      emitOnlineCount();
     }
   });
-
-  // 변경: 연결 복구가 안 된 경우, 마지막으로 받은 메시지 이후 기록을 다시 보내줌.
-  if (!socket.recovered) {
-    try {
-      const serverOffset = Number(socket.handshake.auth.serverOffset || 0);
-
-      const result = await pool.query(
-        `
-        SELECT id, nickname, content
-        FROM messages
-        WHERE id > $1
-        ORDER BY id ASC
-        `,
-        [serverOffset]
-      );
-
-      for (const row of result.rows) {
-        socket.emit(
-          'chat message',
-          row.nickname || '익명',
-          row.content,
-          row.id
-        );
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
 });
 
 async function main() {
   if (!process.env.DATABASE_URL) {
-    throw new Error('DATABASE_URL 환경변수가 필요합니다.');
+    throw new Error('DATABASE_URL environment variable is required.');
   }
 
   await initDb();
 
-  // 변경: 배포 플랫폼은 process.env.PORT 하나만 사용.
   const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
