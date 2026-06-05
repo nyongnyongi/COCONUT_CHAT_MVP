@@ -1,58 +1,189 @@
 <!DOCTYPE html>
-<html>
+<html lang="ko">
   <head>
-    <meta name="viewport" content="width=device-width,initial-scale=1.0">
-    <title>Socket.IO chat</title>
-    <style>
-      body { margin: 0; padding-bottom: 3rem; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>Coconut Chat</title>
 
-      #nickname-screen {
+    <link rel="icon" href="/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding-bottom: 3.5rem;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Helvetica, Arial, sans-serif;
+        background: #fafafa;
+        color: #222;
+      }
+
+      #auth-screen {
         position: fixed;
         inset: 0;
+        z-index: 10;
         display: flex;
         align-items: center;
         justify-content: center;
         background: white;
-        z-index: 10;
       }
 
-      #nickname-box {
-        display: flex;
+      #auth-box {
+        width: min(90vw, 360px);
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      #auth-title {
+        margin: 0 0 0.5rem;
+        font-size: 1.5rem;
+        text-align: center;
+      }
+
+      #username-input,
+      #password-input {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 1rem;
+      }
+
+      #auth-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
         gap: 0.5rem;
       }
 
-      #nickname-input {
-        padding: 0.75rem 1rem;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        font-size: 1rem;
-      }
-
-      #nickname-button {
-        padding: 0.75rem 1rem;
-        border: none;
+      #auth-actions button {
+        padding: 0.85rem 1rem;
+        border: 0;
+        border-radius: 6px;
         background: #333;
         color: white;
-        border-radius: 4px;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+
+      #signup-button {
+        background: #167a55;
+      }
+
+      #auth-message {
+        min-height: 1.25rem;
+        margin: 0;
+        color: #c0392b;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+
+      #top-bar {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        justify-content: flex-end;
+        padding: 0.75rem 1rem;
+        background: rgba(255, 255, 255, 0.9);
+        border-bottom: 1px solid #e6e6e6;
+        backdrop-filter: blur(10px);
+      }
+
+      #online-count {
+        font-size: 0.9rem;
+        color: #333;
+      }
+
+      #messages {
+        list-style-type: none;
+        margin: 0;
+        padding: 0;
+      }
+
+      #messages > li {
+        padding: 0.65rem 1rem;
+        word-break: break-word;
+      }
+
+      #messages > li:nth-child(odd) {
+        background: #f0f0f0;
+      }
+
+      .system-message {
+        color: #777;
+        text-align: center;
+        font-size: 0.9rem;
+      }
+
+      #form {
+        position: fixed;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        display: flex;
+        height: 3.5rem;
+        padding: 0.35rem;
+        background: rgba(0, 0, 0, 0.12);
+        backdrop-filter: blur(10px);
+      }
+
+      #input {
+        flex: 1;
+        min-width: 0;
+        margin: 0.25rem;
+        padding: 0 1rem;
+        border: 0;
+        border-radius: 999px;
         font-size: 1rem;
       }
 
-      #form { background: rgba(0, 0, 0, 0.15); padding: 0.25rem; position: fixed; bottom: 0; left: 0; right: 0; display: flex; height: 3rem; box-sizing: border-box; backdrop-filter: blur(10px); }
-      #input { border: none; padding: 0 1rem; flex-grow: 1; border-radius: 2rem; margin: 0.25rem; }
-      #input:focus { outline: none; }
-      #form > button { background: #333; border: none; padding: 0 1rem; margin: 0.25rem; border-radius: 3px; outline: none; color: #fff; }
+      #input:focus {
+        outline: none;
+      }
 
-      #messages { list-style-type: none; margin: 0; padding: 0; }
-      #messages > li { padding: 0.5rem 1rem; }
-      #messages > li:nth-child(odd) { background: #efefef; }
+      #form > button {
+        margin: 0.25rem;
+        padding: 0 1rem;
+        border: 0;
+        border-radius: 6px;
+        background: #333;
+        color: white;
+        font-size: 1rem;
+        cursor: pointer;
+      }
     </style>
   </head>
+
   <body>
-    <div id="nickname-screen">
-      <div id="nickname-box">
-        <input id="nickname-input" autocomplete="off" placeholder="닉네임" />
-        <button id="nickname-button">시작</button>
+    <div id="auth-screen">
+      <div id="auth-box">
+        <h1 id="auth-title">Coconut Chat</h1>
+
+        <input id="username-input" autocomplete="username" placeholder="아이디" />
+
+        <input
+          id="password-input"
+          type="password"
+          autocomplete="current-password"
+          placeholder="비밀번호 6자리 이상"
+        />
+
+        <div id="auth-actions">
+          <button id="login-button" type="button">로그인</button>
+          <button id="signup-button" type="button">회원가입</button>
+        </div>
+
+        <p id="auth-message"></p>
       </div>
+    </div>
+
+    <div id="top-bar">
+      <span id="online-count">현재 접속자: 0명</span>
     </div>
 
     <ul id="messages"></ul>
@@ -63,87 +194,144 @@
     </form>
 
     <script src="/socket.io/socket.io.js"></script>
+
     <script>
-      let counter = 0;
-      let nickname = '익명';
-      let socket;
+      let socket = null;
+      let loginToken = null;
 
-      const nicknameScreen = document.getElementById('nickname-screen');
-      const nicknameInput = document.getElementById('nickname-input');
-      const nicknameButton = document.getElementById('nickname-button');
+      const authScreen = document.getElementById('auth-screen');
+      const usernameInput = document.getElementById('username-input');
+      const passwordInput = document.getElementById('password-input');
+      const loginButton = document.getElementById('login-button');
+      const signupButton = document.getElementById('signup-button');
+      const authMessage = document.getElementById('auth-message');
 
+      const onlineCount = document.getElementById('online-count');
       const form = document.getElementById('form');
       const input = document.getElementById('input');
       const messages = document.getElementById('messages');
 
+      function addMessage(text, className) {
+        const item = document.createElement('li');
+
+        item.textContent = text;
+
+        if (className) {
+          item.className = className;
+        }
+
+        messages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+
+      async function requestAuth(type) {
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
+
+        authMessage.style.color = '#c0392b';
+        authMessage.textContent = '';
+
+        if (!username || password.length < 6) {
+          authMessage.textContent = '아이디와 6자 이상 비밀번호가 필요합니다.';
+          return;
+        }
+
+        try {
+          const response = await fetch(`/api/${type}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              username,
+              password
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            authMessage.textContent = data.message || '요청 실패';
+            return;
+          }
+
+          if (type === 'signup') {
+            authMessage.style.color = '#167a55';
+            authMessage.textContent = '회원가입 완료! 이제 로그인하세요.';
+            passwordInput.value = '';
+            passwordInput.focus();
+            return;
+          }
+
+          loginToken = data.token;
+          startChat();
+        } catch (e) {
+          authMessage.textContent = '서버 연결 실패';
+        }
+      }
+
       function startChat() {
-        nickname = nicknameInput.value.trim() || '익명';
+        authScreen.style.display = 'none';
 
-        // prompt가 안 뜨는 문제를 피하기 위해 직접 만든 닉네임 입력 화면을 숨김.
-        nicknameScreen.style.display = 'none';
-
-        // 닉네임이 정해진 뒤에 Socket.IO 연결을 시작함.
         socket = io({
-          ackTimeout: 10000,
-          retries: 3,
           auth: {
-            serverOffset: 0
+            token: loginToken
           }
         });
 
-        socket.emit('set nickname', nickname, () => {
-  console.log('nickname registered');
-});
+        socket.on('connect_error', () => {
+          authScreen.style.display = 'flex';
+          authMessage.style.color = '#c0392b';
+          authMessage.textContent = '채팅 서버 인증에 실패했습니다.';
+        });
 
-        socket.on('chat message', (nickname, msg, serverOffset) => {
-          const item = document.createElement('li');
+        socket.on('auth error', (msg) => {
+          authScreen.style.display = 'flex';
+          authMessage.style.color = '#c0392b';
+          authMessage.textContent = msg || '로그인이 필요합니다.';
+        });
 
-          // 기존에는 msg만 출력했음.
-          // 이제 서버에서 받은 nickname과 msg를 같이 출력함.
-          item.textContent = `[${nickname}] ${msg}`;
-
-          messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight);
-
-          socket.auth.serverOffset = serverOffset;
+        socket.on('chat message', (username, msg) => {
+          addMessage(`[${username}] ${msg}`);
         });
 
         socket.on('system message', (msg) => {
-          const item = document.createElement('li');
-          item.textContent = msg;
-          item.style.color = '#777';
-          item.style.textAlign = 'center';
-          messages.appendChild(item);
-          window.scrollTo(0, document.body.scrollHeight);
+          addMessage(msg, 'system-message');
+        });
+
+        socket.on('online count', (count) => {
+          onlineCount.textContent = `현재 접속자: ${count}명`;
         });
       }
 
-      nicknameButton.addEventListener('click', startChat);
+      loginButton.addEventListener('click', () => {
+        requestAuth('login');
+      });
 
-      nicknameInput.addEventListener('keydown', (e) => {
+      signupButton.addEventListener('click', () => {
+        requestAuth('signup');
+      });
+
+      passwordInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
-          startChat();
+          requestAuth('login');
         }
       });
 
       form.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        if (!socket) {
+        if (!socket || !input.value.trim()) {
           return;
         }
 
-        if (input.value) {
-          const clientOffset = `${socket.id}-${counter++}`;
+        const msg = input.value;
 
-          // 기존에는 input.value, clientOffset만 보냈음.
-          // 이제 nickname, input.value, clientOffset 순서로 보냄.
-          socket.emit('chat message', nickname, input.value, clientOffset, () => {
-            input.value = '';
-          });
-
+        socket.emit('chat message', msg, () => {
           input.value = '';
-        }
+        });
+
+        input.value = '';
       });
     </script>
   </body>

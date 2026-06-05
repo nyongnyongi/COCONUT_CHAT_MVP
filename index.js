@@ -1,211 +1,317 @@
 const express = require('express');
 const { createServer } = require('node:http');
 const { join } = require('node:path');
+const crypto = require('node:crypto');
 const { Server } = require('socket.io');
-const sqlite3 = require('sqlite3');
-const { open } = require('sqlite');
-const { availableParallelism } = require('node:os');
-const cluster = require('node:cluster');
-const { createAdapter, setupPrimary } = require('@socket.io/cluster-adapter');
+const { Pool } = require('pg');
+const bcrypt = require('bcrypt');
 
-if (cluster.isPrimary) {
-  const numCPUs = availableParallelism();
-
-  for (let i = 0; i < numCPUs; i++) {
-    cluster.fork({
-      PORT: 3000 + i
-    });
-  }
-
-  return setupPrimary();
+if (process.env.NODE_ENV !== 'production') {
+  require('dotenv').config();
 }
 
-async function main() {
-  const db = await open({
-    filename: 'chat.db',
-    driver: sqlite3.Database
+const app = express();
+const server = createServer(app);
+
+app.use(express.json());
+app.use(express.static(__dirname));
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+const io = new Server(server);
+
+function getTokenSecret() {
+  return process.env.SESSION_SECRET || process.env.DATABASE_URL;
+}
+
+function normalizeUsername(username) {
+  return String(username || '').trim().slice(0, 30);
+}
+
+function normalizePassword(password) {
+  return String(password || '');
+}
+
+function encodePayload(payload) {
+  return Buffer.from(JSON.stringify(payload)).toString('base64url');
+}
+
+function decodePayload(payloadBase64) {
+  return JSON.parse(Buffer.from(payloadBase64, 'base64url').toString('utf8'));
+}
+
+function signPayload(payloadBase64) {
+  return crypto
+    .createHmac('sha256', getTokenSecret())
+    .update(payloadBase64)
+    .digest('base64url');
+}
+
+function createToken(user) {
+  const payloadBase64 = encodePayload({
+    id: user.id,
+    username: user.username,
+    createdAt: Date.now()
   });
 
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      client_offset TEXT UNIQUE,
-      content TEXT
+  const signature = signPayload(payloadBase64);
+
+  return `${payloadBase64}.${signature}`;
+}
+
+function verifyToken(token) {
+  try {
+    if (!token || typeof token !== 'string') {
+      return null;
+    }
+
+    const [payloadBase64, signature] = token.split('.');
+
+    if (!payloadBase64 || !signature) {
+      return null;
+    }
+
+    const expectedSignature = signPayload(payloadBase64);
+
+    const signatureBuffer = Buffer.from(signature);
+    const expectedBuffer = Buffer.from(expectedSignature);
+
+    if (signatureBuffer.length !== expectedBuffer.length) {
+      return null;
+    }
+
+    const signatureOk = crypto.timingSafeEqual(
+      signatureBuffer,
+      expectedBuffer
+    );
+
+    if (!signatureOk) {
+      return null;
+    }
+
+    const payload = decodePayload(payloadBase64);
+
+    if (!payload.id || !payload.username) {
+      return null;
+    }
+
+    return {
+      id: payload.id,
+      username: payload.username
+    };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function initDb() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
+}
 
+function getOnlineCount() {
+  let count = 0;
 
-  // 기존 chat.db에는 nickname 컬럼이 없을 수 있음.
-  // cluster에서는 여러 worker가 동시에 실행되므로 ALTER TABLE 에러를 안전하게 처리함.
-  const columns = await db.all('PRAGMA table_info(messages)');
-  const hasNicknameColumn = columns.some((column) => column.name === 'nickname');
-
-  if (!hasNicknameColumn) {
-    try {
-      await db.exec('ALTER TABLE messages ADD COLUMN nickname TEXT');
-    } catch (e) {
-      // 다른 worker가 먼저 nickname 컬럼을 추가했을 수 있음.
-      if (!String(e.message).includes('duplicate column name')) {
-        throw e;
-      }
+  for (const socket of io.sockets.sockets.values()) {
+    if (socket.user) {
+      count += 1;
     }
   }
 
-  await db.exec('DELETE FROM messages');
+  return count;
+}
 
-  const app = express();
-  const server = createServer(app);
+function emitOnlineCount() {
+  io.emit('online count', getOnlineCount());
+}
 
-  const io = new Server(server, {
-    connectionStateRecovery: {},
-    adapter: createAdapter()
-  });
+app.get('/', (req, res) => {
+  res.sendFile(join(__dirname, 'index.html'));
+});
 
-  app.get('/', (req, res) => {
-    res.sendFile(join(__dirname, 'index.html'));
-  });
+app.post('/api/signup', async (req, res) => {
+  const username = normalizeUsername(req.body.username);
+  const password = normalizePassword(req.body.password);
 
-  io.on('connection', async (socket) => {
-    socket.on('set nickname', (nickname, callback) => {
-  socket.nickname = nickname || '익명';
+  if (!username || password.length < 6) {
+    return res.status(400).json({
+      message: '아이디와 6자 이상 비밀번호가 필요합니다.'
+    });
+  }
 
-  io.emit('system message', `[${socket.nickname}] 님이 접속했습니다.`);
+  try {
+    const existing = await pool.query(
+      'SELECT id FROM users WHERE username = $1',
+      [username]
+    );
 
-  // 클라이언트가 retries 옵션을 쓰고 있으므로 ack 응답을 해줘야 함.
-  if (callback) {
-    callback();
+    if (existing.rows.length > 0) {
+      return res.status(409).json({
+        message: '이미 사용 중인 아이디입니다.'
+      });
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const result = await pool.query(
+      `
+      INSERT INTO users (username, password_hash)
+      VALUES ($1, $2)
+      RETURNING id, username
+      `,
+      [username, passwordHash]
+    );
+
+    return res.status(201).json({
+      message: '회원가입 완료',
+      user: result.rows[0]
+    });
+  } catch (e) {
+    console.error('signup error:', e);
+
+    if (e.code === '23505') {
+      return res.status(409).json({
+        message: '이미 사용 중인 아이디입니다.'
+      });
+    }
+
+    return res.status(500).json({
+      message: '회원가입 실패'
+    });
   }
 });
 
-    socket.on('chat message', async (nickname, msg, clientOffset, callback) => {
-      let result;
+app.post('/api/login', async (req, res) => {
+  const username = normalizeUsername(req.body.username);
+  const password = normalizePassword(req.body.password);
 
-      try {
-        // 기존에는 content만 저장했음.
-        // 닉네임을 같이 보여주려면 DB에도 nickname을 저장해야 함.
-        result = await db.run(
-          'INSERT INTO messages (nickname, content, client_offset) VALUES (?, ?, ?)',
-          nickname,
-          msg,
-          clientOffset
-        );
-      } catch (e) {
-        if (e.errno === 19) {
-          if (callback) callback();
-        } else {
-          console.error(e);
-        }
-
-        return;
-      }
-
-      // 클라이언트가 nickname, msg, serverOffset 순서로 받게 보냄.
-      io.emit('chat message', nickname, msg, result.lastID);
-
-      if (callback) {
-        callback();
-      }
+  if (!username || password.length < 6) {
+    return res.status(400).json({
+      message: '아이디와 6자 이상 비밀번호가 필요합니다.'
     });
+  }
 
-    socket.on('disconnect', () => {
-    if (socket.nickname) {
-      io.emit('system message', `[${socket.nickname}] 님이 퇴장했습니다.`);
+  try {
+    const result = await pool.query(
+      'SELECT id, username, password_hash FROM users WHERE username = $1',
+      [username]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(401).json({
+        message: '아이디 또는 비밀번호가 틀렸습니다.'
+      });
     }
+
+    const user = result.rows[0];
+    const passwordOk = await bcrypt.compare(password, user.password_hash);
+
+    if (!passwordOk) {
+      return res.status(401).json({
+        message: '아이디 또는 비밀번호가 틀렸습니다.'
+      });
+    }
+
+    const token = createToken(user);
+
+    return res.json({
+      user: {
+        id: user.id,
+        username: user.username
+      },
+      token
+    });
+  } catch (e) {
+    console.error('login error:', e);
+
+    return res.status(500).json({
+      message: '로그인 실패'
+    });
+  }
+});
+
+app.get('/api/debug-users', async (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(404).json({ message: 'Not found' });
+  }
+
+  try {
+    const result = await pool.query(`
+      SELECT id, username, created_at
+      FROM users
+      ORDER BY id DESC
+      LIMIT 20
+    `);
+
+    return res.json(result.rows);
+  } catch (e) {
+    console.error('debug users error:', e);
+
+    return res.status(500).json({
+      message: '사용자 조회 실패'
+    });
+  }
+});
+
+io.on('connection', (socket) => {
+  const user = verifyToken(socket.handshake.auth.token);
+
+  if (!user) {
+    socket.emit('auth error', '로그인이 필요합니다.');
+    socket.disconnect();
+    return;
+  }
+
+  socket.user = user;
+
+  io.emit('system message', `[${user.username}] 님이 접속했습니다.`);
+  emitOnlineCount();
+
+  socket.on('chat message', (msg, callback) => {
+    const safeMsg = String(msg || '').trim().slice(0, 500);
+
+    if (!safeMsg) {
+      callback?.();
+      return;
+    }
+
+    io.emit('chat message', socket.user.username, safeMsg);
+
+    callback?.();
   });
 
-    if (!socket.recovered) {
-      try {
-        await db.each(
-          'SELECT id, nickname, content FROM messages WHERE id > ?',
-          [socket.handshake.auth.serverOffset || 0],
-          (_err, row) => {
-            socket.emit(
-              'chat message',
-              row.nickname || '익명',
-              row.content,
-              row.id
-            );
-          }
-        );
-      } catch (e) {
-        console.error(e);
-      }
+  socket.on('disconnect', () => {
+    if (socket.user) {
+      io.emit('system message', `[${socket.user.username}] 님이 퇴장했습니다.`);
+      emitOnlineCount();
     }
   });
+});
 
-  const port = process.env.PORT;
+async function main() {
+  if (!process.env.DATABASE_URL) {
+    throw new Error('DATABASE_URL environment variable is required.');
+  }
+
+  await initDb();
+
+  const port = process.env.PORT || 3000;
 
   server.listen(port, () => {
-    console.log(`server running at http://localhost:${port}`);
+    console.log(`server running on port ${port}`);
   });
 }
 
-main();
-
-/*io.on('connection', (socket) => {
-    console.log('a user connected');
-    socket.on('disconnect', () => {
-        console.log('user disconnected');
-    });
-});*/
-
-/*io.on('connection', (socket) => {
-    socket.on('chat message', (msg) => {
-        console.log('message: ' + msg);
-    });
-});*/
-
-/*io.on('connection', (socket) => {
-    socket.on('chat message', (msg) => {
-        io.emit('chat message', msg);
-    });
-});*/
-
-
-/*socket.emit('hello', 'world');
-//emit은 이벤트를 보낸다는 뜻: '서버야,hello라는 이벤트를 보낼게. 데이터는 "world" 야.'
-io.on('connection', (socket) => {
-    socket.on('hello', (arg) => {
-        //누가 "hello" 이벤트를 보내면 실행
-        console.log(arg);
-    });
-});*/
-
-/*socket.emit('join', '시우');
-socket.emit('message', '안녕하세요');
-socket.emit('leave', '시우');
-
-socket.on('join', (name) => {
-    console.log('입장:', name);
+main().catch((e) => {
+  console.error(e);
+  process.exit(1);
 });
-
-socket.on('message', (msg) => {
-    console.log('메시지:', msg);
-});
-
-socket.on('leave', (leave) => {
-    console.log('이름:', leave);
-})*/ 
-
-//이런 식으로 socket. on 을 써버리면 각각의 이벤트에 대해 하나씩 만들어야 한다. 
-
-/*socket.onAny((event, ...args) => {
-    console.log('이벤트:', event);
-    console.log('데이터:', args);
-});
-
-socket.emit('join', '시우');
-socket.emit('message', '안녕하세요');
-socket.emit('leave', '시우');*/
-
-//onAny를 쓰면 모든 이벤트에 대하여 동일한 서식을 적용한다. 
-
-/*io.on('connection', (socket) => {
-    socket.join('some room');
-
-    io.to('some room').emit('hello', 'world');
-
-    io.except('some room').emit('hello', 'world');
-
-    socket.leave('some room');
-});*/
