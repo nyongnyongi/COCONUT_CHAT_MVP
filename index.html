@@ -5,10 +5,6 @@
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>Coconut Chat</title>
 
-    <link rel="icon" href="/icon-192.png" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
-    <link rel="manifest" href="/manifest.json" />
-
     <style>
       * {
         box-sizing: border-box;
@@ -16,17 +12,29 @@
 
       body {
         margin: 0;
-        padding-bottom: 3.5rem;
+        padding-bottom: 4.25rem;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           Helvetica, Arial, sans-serif;
         background: #fafafa;
         color: #222;
       }
 
+      button {
+        cursor: pointer;
+      }
+
+      input {
+        width: 100%;
+        padding: 0.85rem 1rem;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 1rem;
+      }
+
       #auth-screen {
         position: fixed;
         inset: 0;
-        z-index: 10;
+        z-index: 20;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -41,77 +49,345 @@
 
       #auth-title {
         margin: 0 0 0.5rem;
-        font-size: 1.5rem;
         text-align: center;
       }
 
-      #username-input,
-      #password-input {
-        width: 100%;
-        padding: 0.85rem 1rem;
-        border: 1px solid #ccc;
-        border-radius: 6px;
-        font-size: 1rem;
-      }
-
-      #auth-actions {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 0.5rem;
+      #auth-actions,
+      .button-row {
+        display: flex;
+        gap: 0.75rem;
       }
 
       #auth-actions button {
-        padding: 0.85rem 1rem;
+        flex: 1;
+      }
+
+      #auth-actions button,
+      .primary-button,
+      .danger-button,
+      .small-button {
         border: 0;
         border-radius: 6px;
         background: #333;
         color: white;
         font-size: 1rem;
-        cursor: pointer;
+      }
+
+      #auth-actions button,
+      .primary-button,
+      .danger-button {
+        padding: 0.8rem 1rem;
+      }
+
+      .small-button {
+        padding: 0.45rem 0.7rem;
+        font-size: 0.85rem;
+      }
+
+      .small-button:disabled {
+        cursor: default;
+        opacity: 0.55;
       }
 
       #signup-button {
         background: #167a55;
       }
 
-      #auth-message {
+      .danger-button {
+        background: #9b2c2c;
+      }
+
+      #auth-message,
+      #page-message {
         min-height: 1.25rem;
         margin: 0;
+        padding: 0.35rem 1rem;
         color: #c0392b;
         text-align: center;
         font-size: 0.9rem;
       }
 
+      #app {
+        display: none;
+      }
+
       #top-bar {
         position: sticky;
         top: 0;
-        z-index: 2;
+        z-index: 5;
         display: flex;
-        justify-content: flex-end;
+        align-items: center;
+        justify-content: space-between;
+        gap: 1rem;
         padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.9);
+        background: rgba(255, 255, 255, 0.92);
         border-bottom: 1px solid #e6e6e6;
         backdrop-filter: blur(10px);
       }
 
-      #online-count {
-        font-size: 0.9rem;
-        color: #333;
+      #my-profile,
+      .profile-line {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        min-width: 0;
       }
 
-      #messages {
-        list-style-type: none;
+      #my-profile-image,
+      .avatar {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex: 0 0 auto;
+        background: #ddd;
+      }
+
+      #my-profile-image {
+        display: none;
+      }
+
+      #my-profile-placeholder,
+      .avatar-placeholder {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: grid;
+        place-items: center;
+        flex: 0 0 auto;
+        background: #ddd;
+        color: #555;
+        font-weight: 700;
+      }
+
+      .blocked-avatar {
+        display: grid;
+        place-items: center;
+        border: 1px solid #ddd;
+        background: #f1f1f1;
+        color: #9b2c2c;
+        font-size: 1.25rem;
+      }
+
+      #my-nickname {
+        display: block;
+        max-width: 180px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      #my-meta {
+        color: #777;
+        font-size: 0.8rem;
+      }
+
+      .view {
+        display: none;
+        padding: 1rem;
+      }
+
+      .view.active {
+        display: block;
+      }
+
+      .section {
+        display: grid;
+        gap: 0.75rem;
+        margin-bottom: 1rem;
+      }
+
+      .section-title {
+        margin: 0.5rem 0;
+        font-size: 1.05rem;
+        text-align: center;
+      }
+
+      .list {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      .list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+      }
+
+      .list-main {
+        min-width: 0;
+      }
+
+      .list-title {
+        font-weight: 700;
+      }
+
+      .list-sub {
+        margin-top: 0.15rem;
+        color: #777;
+        font-size: 0.85rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .badge {
+        min-width: 1.35rem;
+        height: 1.35rem;
+        display: inline-grid;
+        place-items: center;
+        padding: 0 0.4rem;
+        border-radius: 999px;
+        background: #e53935;
+        color: white;
+        font-size: 0.78rem;
+        font-weight: 700;
+      }
+
+      #rooms-top-actions {
+        position: relative;
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 1rem;
+      }
+
+      #new-chat-button {
+        background: #111;
+      }
+
+      #new-chat-menu {
+        position: absolute;
+        top: calc(100% + 0.5rem);
+        right: 0;
+        z-index: 4;
+        display: none;
+        min-width: 160px;
+        padding: 0.5rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      }
+
+      #new-chat-menu.open {
+        display: grid;
+        gap: 0.5rem;
+      }
+
+      #direct-chat-panel,
+      #group-chat-panel {
+        display: none;
+      }
+
+      #direct-chat-panel.open,
+      #group-chat-panel.open {
+        display: grid;
+      }
+
+      #group-create-layout {
+        width: min(100%, 520px);
+        margin: 0 auto;
+        display: grid;
+        gap: 0.75rem;
+      }
+
+      #group-friends-list {
+        display: none;
+        gap: 0.5rem;
+      }
+
+      #group-friends-list.open {
+        display: grid;
+      }
+
+      .group-friend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        padding: 0.65rem 0.75rem;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        background: white;
+      }
+
+      .group-friend-item span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .group-friend-item input {
+        width: auto;
+        flex: 0 0 auto;
+      }
+
+      #room-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+
+      #room-title {
         margin: 0;
-        padding: 0;
-      }
-
-      #messages > li {
-        padding: 0.65rem 1rem;
+        font-size: 1.15rem;
         word-break: break-word;
       }
 
-      #messages > li:nth-child(odd) {
-        background: #f0f0f0;
+      #room-name-form {
+        display: flex;
+        gap: 0.75rem;
+        margin-bottom: 0.75rem;
+      }
+
+      #room-name-input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      #room-info-panel {
+        display: none;
+        gap: 0.5rem;
+        margin-bottom: 0.75rem;
+      }
+
+      #room-info-panel.open {
+        display: grid;
+      }
+
+      .member-menu {
+        display: none;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.5rem;
+      }
+
+      .member-menu.open {
+        display: flex;
+      }
+
+      #room-messages,
+      #open-messages {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: grid;
+        gap: 0.6rem;
+      }
+
+      .message-row {
+        position: relative;
+        padding: 0.75rem;
+        border: 1px solid #e6e6e6;
+        border-radius: 8px;
+        background: white;
       }
 
       .system-message {
@@ -120,41 +396,108 @@
         font-size: 0.9rem;
       }
 
-      #form {
+      .message-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.75rem;
+      }
+
+      .message-sender {
+        font-weight: 700;
+      }
+
+      .message-time {
+        margin-left: 0.4rem;
+        color: #888;
+        font-size: 0.78rem;
+      }
+
+      .message-content {
+        margin-top: 0.35rem;
+        word-break: break-word;
+      }
+
+      .message-menu-button {
+        width: 2rem;
+        height: 2rem;
+        border: 0;
+        border-radius: 999px;
+        background: #f0f0f0;
+        color: #333;
+        font-size: 1.1rem;
+        line-height: 1;
+      }
+
+      .message-menu {
+        display: none;
+        justify-content: flex-end;
+        gap: 0.5rem;
+        margin-top: 0.55rem;
+      }
+
+      .message-menu.open {
+        display: flex;
+      }
+
+      #room-form,
+      #open-form {
+        position: fixed;
+        right: 0;
+        bottom: 3.7rem;
+        left: 0;
+        display: none;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        background: rgba(250, 250, 250, 0.96);
+        border-top: 1px solid #e6e6e6;
+        backdrop-filter: blur(10px);
+      }
+
+      #room-form.active,
+      #open-form.active {
+        display: flex;
+      }
+
+      #room-input,
+      #open-input {
+        flex: 1;
+        min-width: 0;
+      }
+
+      #bottom-tabs {
         position: fixed;
         right: 0;
         bottom: 0;
         left: 0;
-        display: flex;
-        height: 3.5rem;
-        padding: 0.35rem;
-        background: rgba(0, 0, 0, 0.12);
-        backdrop-filter: blur(10px);
+        z-index: 8;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 0.25rem;
+        padding: 0.45rem;
+        background: white;
+        border-top: 1px solid #e6e6e6;
       }
 
-      #input {
-        flex: 1;
-        min-width: 0;
-        margin: 0.25rem;
-        padding: 0 1rem;
-        border: 0;
-        border-radius: 999px;
-        font-size: 1rem;
-      }
-
-      #input:focus {
-        outline: none;
-      }
-
-      #form > button {
-        margin: 0.25rem;
-        padding: 0 1rem;
+      #bottom-tabs button {
+        padding: 0.65rem 0.25rem;
         border: 0;
         border-radius: 6px;
+        background: #f2f2f2;
+        color: #333;
+      }
+
+      #bottom-tabs button.active {
         background: #333;
         color: white;
-        font-size: 1rem;
-        cursor: pointer;
+      }
+
+      @media (max-width: 720px) {
+        #room-name-form,
+        #room-header {
+          flex-direction: column;
+          align-items: stretch;
+        }
       }
     </style>
   </head>
@@ -182,45 +525,465 @@
       </div>
     </div>
 
-    <div id="top-bar">
-      <span id="online-count">현재 접속자: 0명</span>
+    <div id="app">
+      <div id="top-bar">
+        <div id="my-profile">
+          <div id="my-profile-placeholder">?</div>
+          <img id="my-profile-image" alt="프로필" />
+
+          <div>
+            <strong id="my-nickname">로그인 전</strong>
+            <div id="my-meta">친구 코드: -</div>
+          </div>
+        </div>
+
+        <button id="logout-button" class="danger-button" type="button">
+          로그아웃
+        </button>
+      </div>
+
+      <p id="page-message"></p>
+
+      <main id="friends-view" class="view active">
+        <section class="section">
+          <h2 class="section-title">친구 추가</h2>
+          <input id="friend-code-input" placeholder="친구 코드" />
+          <button id="add-friend-button" class="primary-button" type="button">
+            친구 추가
+          </button>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">친구 목록</h2>
+          <div id="friends-list" class="list"></div>
+        </section>
+      </main>
+
+      <main id="rooms-view" class="view">
+        <div id="rooms-top-actions">
+          <button id="new-chat-button" class="primary-button" type="button">
+            새 채팅
+          </button>
+
+          <div id="new-chat-menu">
+            <button id="direct-chat-option-button" class="small-button" type="button">
+              1:1 채팅
+            </button>
+            <button id="group-chat-option-button" class="small-button" type="button">
+              단체 채팅
+            </button>
+          </div>
+        </div>
+
+        <section id="direct-chat-panel" class="section">
+          <h2 class="section-title">1:1 채팅 시작</h2>
+          <div id="direct-friends-list" class="list"></div>
+        </section>
+
+        <section id="group-chat-panel" class="section">
+          <h2 class="section-title">단체 채팅 만들기</h2>
+
+          <div id="group-create-layout">
+            <input
+              id="group-name-input"
+              placeholder="방 이름. 비워두면 멤버 닉네임으로 자동 생성"
+            />
+
+            <button id="toggle-group-friends-button" class="primary-button" type="button">
+              초대할 친구 더보기
+            </button>
+
+            <div id="group-friends-list"></div>
+
+            <button id="create-group-button" class="primary-button" type="button">
+              선택한 친구와 단체 채팅
+            </button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">채팅방</h2>
+          <div id="rooms-list" class="list"></div>
+        </section>
+      </main>
+
+      <main id="room-view" class="view">
+        <div id="room-header">
+          <h2 id="room-title">채팅방</h2>
+
+          <div class="button-row">
+            <button id="room-info-button" class="primary-button" type="button">
+              정보
+            </button>
+            <button id="leave-room-button" class="danger-button" type="button">
+              나가기
+            </button>
+          </div>
+        </div>
+
+        <form id="room-name-form" action="">
+          <input id="room-name-input" placeholder="채팅방 이름" />
+          <button class="primary-button">이름 변경</button>
+        </form>
+
+        <div id="room-info-panel"></div>
+
+        <ul id="room-messages"></ul>
+      </main>
+
+      <main id="open-view" class="view">
+        <section class="section">
+          <h2 class="section-title">오픈채팅</h2>
+          <ul id="open-messages"></ul>
+        </section>
+      </main>
+
+      <main id="settings-view" class="view">
+        <section class="section">
+          <h2 class="section-title">프로필</h2>
+          <input id="nickname-edit-input" placeholder="새 닉네임" />
+          <input id="status-message-input" placeholder="상태메시지" />
+          <input id="profile-image-input" placeholder="프로필 이미지 주소" />
+
+          <div class="button-row">
+            <button id="save-nickname-button" class="primary-button" type="button">
+              닉네임 저장
+            </button>
+            <button id="save-status-message-button" class="primary-button" type="button">
+              상태 저장
+            </button>
+            <button id="save-profile-image-button" class="primary-button" type="button">
+              이미지 저장
+            </button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">아이디 변경</h2>
+          <input id="username-edit-input" placeholder="새 아이디" />
+          <input
+            id="username-password-input"
+            type="password"
+            placeholder="현재 비밀번호"
+          />
+          <button id="save-username-button" class="primary-button" type="button">
+            아이디 변경
+          </button>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">비밀번호 변경</h2>
+          <input
+            id="current-password-input"
+            type="password"
+            placeholder="현재 비밀번호"
+          />
+          <input
+            id="new-password-input"
+            type="password"
+            placeholder="새 비밀번호"
+          />
+          <input
+            id="new-password-confirm-input"
+            type="password"
+            placeholder="새 비밀번호 확인"
+          />
+          <button id="save-password-button" class="primary-button" type="button">
+            비밀번호 변경
+          </button>
+        </section>
+      </main>
+
+      <form id="room-form" action="">
+        <input id="room-input" autocomplete="off" placeholder="메시지를 입력하세요" />
+        <button class="primary-button">Send</button>
+      </form>
+
+      <form id="open-form" action="">
+        <input id="open-input" autocomplete="off" placeholder="오픈채팅 메시지" />
+        <button class="primary-button">Send</button>
+      </form>
+
+      <nav id="bottom-tabs">
+        <button class="tab-button active" data-view="friends-view" type="button">
+          친구
+        </button>
+        <button class="tab-button" data-view="rooms-view" type="button">
+          채팅
+        </button>
+        <button class="tab-button" data-view="open-view" type="button">
+          오픈
+        </button>
+        <button class="tab-button" data-view="settings-view" type="button">
+          설정
+        </button>
+      </nav>
     </div>
-
-    <ul id="messages"></ul>
-
-    <form id="form" action="">
-      <input id="input" autocomplete="off" />
-      <button>Send</button>
-    </form>
 
     <script src="/socket.io/socket.io.js"></script>
 
     <script>
       let socket = null;
       let loginToken = null;
+      let currentUser = null;
+      let currentRoomId = null;
+      let currentRoomLastMessageId = 0;
+      let isLoggingOut = false;
 
       const authScreen = document.getElementById('auth-screen');
+      const app = document.getElementById('app');
+
       const usernameInput = document.getElementById('username-input');
       const passwordInput = document.getElementById('password-input');
       const loginButton = document.getElementById('login-button');
       const signupButton = document.getElementById('signup-button');
       const authMessage = document.getElementById('auth-message');
+      const pageMessage = document.getElementById('page-message');
 
-      const onlineCount = document.getElementById('online-count');
-      const form = document.getElementById('form');
-      const input = document.getElementById('input');
-      const messages = document.getElementById('messages');
+      const myProfilePlaceholder = document.getElementById('my-profile-placeholder');
+      const myProfileImage = document.getElementById('my-profile-image');
+      const myNickname = document.getElementById('my-nickname');
+      const myMeta = document.getElementById('my-meta');
+      const logoutButton = document.getElementById('logout-button');
 
-      function addMessage(text, className) {
-        const item = document.createElement('li');
+      const friendCodeInput = document.getElementById('friend-code-input');
+      const addFriendButton = document.getElementById('add-friend-button');
+      const friendsList = document.getElementById('friends-list');
+      const directFriendsList = document.getElementById('direct-friends-list');
+      const groupFriendsList = document.getElementById('group-friends-list');
+      const groupNameInput = document.getElementById('group-name-input');
+      const newChatButton = document.getElementById('new-chat-button');
+      const newChatMenu = document.getElementById('new-chat-menu');
+      const directChatOptionButton = document.getElementById('direct-chat-option-button');
+      const groupChatOptionButton = document.getElementById('group-chat-option-button');
+      const directChatPanel = document.getElementById('direct-chat-panel');
+      const groupChatPanel = document.getElementById('group-chat-panel');
+      const toggleGroupFriendsButton = document.getElementById('toggle-group-friends-button');
+      const createGroupButton = document.getElementById('create-group-button');
 
-        item.textContent = text;
+      const roomsList = document.getElementById('rooms-list');
+      const roomTitle = document.getElementById('room-title');
+      const roomInfoButton = document.getElementById('room-info-button');
+      const roomInfoPanel = document.getElementById('room-info-panel');
+      const roomNameForm = document.getElementById('room-name-form');
+      const roomNameInput = document.getElementById('room-name-input');
+      const roomMessages = document.getElementById('room-messages');
+      const roomForm = document.getElementById('room-form');
+      const roomInput = document.getElementById('room-input');
+      const leaveRoomButton = document.getElementById('leave-room-button');
 
-        if (className) {
-          item.className = className;
+      const openMessages = document.getElementById('open-messages');
+      const openForm = document.getElementById('open-form');
+      const openInput = document.getElementById('open-input');
+
+      const nicknameEditInput = document.getElementById('nickname-edit-input');
+      const statusMessageInput = document.getElementById('status-message-input');
+      const profileImageInput = document.getElementById('profile-image-input');
+      const saveNicknameButton = document.getElementById('save-nickname-button');
+      const saveStatusMessageButton = document.getElementById('save-status-message-button');
+      const saveProfileImageButton = document.getElementById('save-profile-image-button');
+
+      const usernameEditInput = document.getElementById('username-edit-input');
+      const usernamePasswordInput = document.getElementById('username-password-input');
+      const saveUsernameButton = document.getElementById('save-username-button');
+
+      const currentPasswordInput = document.getElementById('current-password-input');
+      const newPasswordInput = document.getElementById('new-password-input');
+      const newPasswordConfirmInput = document.getElementById('new-password-confirm-input');
+      const savePasswordButton = document.getElementById('save-password-button');
+
+      const tabButtons = document.querySelectorAll('.tab-button');
+
+      function setPageMessage(text, ok = false) {
+        pageMessage.style.color = ok ? '#167a55' : '#c0392b';
+        pageMessage.textContent = text || '';
+      }
+
+      async function authFetch(url, options = {}) {
+        return fetch(url, {
+          ...options,
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${loginToken}`,
+            ...(options.headers || {})
+          }
+        });
+      }
+
+      function formatTime(value) {
+        if (!value) {
+          return '';
         }
 
-        messages.appendChild(item);
+        return new Date(value).toLocaleTimeString('ko-KR', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+      }
+
+      function createAvatar(user) {
+        if (user.isBlocked) {
+          const blocked = document.createElement('div');
+          blocked.className = 'avatar blocked-avatar';
+          blocked.textContent = '🚫';
+          return blocked;
+        }
+
+        if (user.profileImage) {
+          const image = document.createElement('img');
+          image.className = 'avatar';
+          image.src = user.profileImage;
+          image.alt = '프로필';
+          return image;
+        }
+
+        const placeholder = document.createElement('div');
+        placeholder.className = 'avatar-placeholder';
+        placeholder.textContent = (user.nickname || user.username || '?')
+          .slice(0, 1)
+          .toUpperCase();
+
+        return placeholder;
+      }
+
+      function renderProfileImage(profileImage) {
+        if (profileImage) {
+          myProfileImage.src = profileImage;
+          myProfileImage.style.display = 'block';
+          myProfilePlaceholder.style.display = 'none';
+        } else {
+          myProfileImage.removeAttribute('src');
+          myProfileImage.style.display = 'none';
+          myProfilePlaceholder.style.display = 'grid';
+        }
+      }
+
+      function renderMe(user) {
+        currentUser = user;
+
+        myNickname.textContent = user.nickname || user.username;
+        myMeta.textContent = `친구 코드: ${user.friendCode}`;
+
+        nicknameEditInput.value = user.nickname || user.username;
+        statusMessageInput.value = user.statusMessage || '';
+        profileImageInput.value = user.profileImage || '';
+        usernameEditInput.value = user.username;
+        usernamePasswordInput.value = '';
+
+        myProfilePlaceholder.textContent = (user.nickname || user.username || '?')
+          .slice(0, 1)
+          .toUpperCase();
+
+        renderProfileImage(user.profileImage);
+      }
+
+      function showView(viewId) {
+        document.querySelectorAll('.view').forEach((view) => {
+          view.classList.toggle('active', view.id === viewId);
+        });
+
+        tabButtons.forEach((button) => {
+          button.classList.toggle('active', button.dataset.view === viewId);
+        });
+
+        roomForm.classList.toggle('active', viewId === 'room-view');
+        openForm.classList.toggle('active', viewId === 'open-view');
+
+        if (viewId !== 'room-view') {
+          currentRoomId = null;
+          currentRoomLastMessageId = 0;
+          roomInfoPanel.classList.remove('open');
+        }
+      }
+
+      function openNewChatPanel(type) {
+        newChatMenu.classList.remove('open');
+        directChatPanel.classList.toggle('open', type === 'direct');
+        groupChatPanel.classList.toggle('open', type === 'group');
+
+        if (type === 'direct' || type === 'group') {
+          loadFriends();
+        }
+      }
+
+      function addOpenMessage(text, className) {
+        const item = document.createElement('li');
+        item.className = className ? `message-row ${className}` : 'message-row';
+        item.textContent = text;
+        openMessages.appendChild(item);
+        window.scrollTo(0, document.body.scrollHeight);
+      }
+
+      function renderRoomMessage(message) {
+        const item = document.createElement('li');
+        item.className = 'message-row';
+        item.dataset.messageId = message.id;
+
+        const head = document.createElement('div');
+        head.className = 'message-head';
+
+        const sender = document.createElement('div');
+
+        const senderName = document.createElement('span');
+        senderName.className = 'message-sender';
+        senderName.textContent = message.senderName;
+
+        const time = document.createElement('span');
+        time.className = 'message-time';
+        time.textContent = formatTime(message.createdAt);
+
+        sender.appendChild(senderName);
+        sender.appendChild(time);
+
+        const menuButton = document.createElement('button');
+        menuButton.type = 'button';
+        menuButton.className = 'message-menu-button';
+        menuButton.textContent = '...';
+
+        const content = document.createElement('div');
+        content.className = 'message-content';
+        content.textContent = message.content;
+
+        const menu = document.createElement('div');
+        menu.className = 'message-menu';
+
+        const deleteForMeButton = document.createElement('button');
+        deleteForMeButton.type = 'button';
+        deleteForMeButton.className = 'small-button';
+        deleteForMeButton.textContent = '나에게서 삭제';
+
+        const deleteForEveryoneButton = document.createElement('button');
+        deleteForEveryoneButton.type = 'button';
+        deleteForEveryoneButton.className = 'small-button';
+        deleteForEveryoneButton.textContent = '모두에게서 삭제';
+
+        menuButton.addEventListener('click', () => {
+          menu.classList.toggle('open');
+        });
+
+        deleteForMeButton.addEventListener('click', async () => {
+          await deleteMessageForMe(message.id);
+          item.remove();
+        });
+
+        deleteForEveryoneButton.addEventListener('click', async () => {
+          await deleteMessageForEveryone(message.id);
+        });
+
+        menu.appendChild(deleteForMeButton);
+
+        if (String(message.senderId) === String(currentUser.id)) {
+          menu.appendChild(deleteForEveryoneButton);
+        }
+
+        head.appendChild(sender);
+        head.appendChild(menuButton);
+        item.appendChild(head);
+        item.appendChild(content);
+        item.appendChild(menu);
+        roomMessages.appendChild(item);
+
+        currentRoomLastMessageId = Math.max(currentRoomLastMessageId, Number(message.id));
         window.scrollTo(0, document.body.scrollHeight);
       }
 
@@ -242,10 +1005,7 @@
             headers: {
               'Content-Type': 'application/json'
             },
-            body: JSON.stringify({
-              username,
-              password
-            })
+            body: JSON.stringify({ username, password })
           });
 
           const data = await response.json();
@@ -264,14 +1024,56 @@
           }
 
           loginToken = data.token;
-          startChat();
+          localStorage.setItem('loginToken', loginToken);
+
+          renderMe(data.user);
+          startApp();
         } catch (e) {
           authMessage.textContent = '서버 연결 실패';
         }
       }
 
-      function startChat() {
+      async function loadMe() {
+        loginToken = localStorage.getItem('loginToken');
+
+        if (!loginToken) {
+          return;
+        }
+
+        try {
+          const response = await authFetch('/api/me');
+
+          if (!response.ok) {
+            localStorage.removeItem('loginToken');
+            loginToken = null;
+            return;
+          }
+
+          const data = await response.json();
+
+          renderMe(data.user);
+          startApp();
+        } catch (e) {
+          localStorage.removeItem('loginToken');
+          loginToken = null;
+        }
+      }
+
+      function startApp() {
+        isLoggingOut = false;
+
         authScreen.style.display = 'none';
+        app.style.display = 'block';
+
+        connectSocket();
+        loadFriends();
+        loadRooms();
+      }
+
+      function connectSocket() {
+        if (socket) {
+          socket.disconnect();
+        }
 
         socket = io({
           auth: {
@@ -281,36 +1083,765 @@
 
         socket.on('connect_error', () => {
           authScreen.style.display = 'flex';
-          authMessage.style.color = '#c0392b';
+          app.style.display = 'none';
           authMessage.textContent = '채팅 서버 인증에 실패했습니다.';
         });
 
         socket.on('auth error', (msg) => {
           authScreen.style.display = 'flex';
-          authMessage.style.color = '#c0392b';
+          app.style.display = 'none';
           authMessage.textContent = msg || '로그인이 필요합니다.';
         });
 
         socket.on('chat message', (username, msg) => {
-          addMessage(`[${username}] ${msg}`);
+          if (isLoggingOut) {
+            return;
+          }
+
+          addOpenMessage(`[${username}] ${msg}`);
         });
 
         socket.on('system message', (msg) => {
-          addMessage(msg, 'system-message');
+          if (isLoggingOut) {
+            return;
+          }
+
+          addOpenMessage(msg, 'system-message');
         });
 
-        socket.on('online count', (count) => {
-          onlineCount.textContent = `현재 접속자: ${count}명`;
+        socket.on('room message', (message) => {
+          const roomViewIsOpen = document
+            .getElementById('room-view')
+            .classList.contains('active');
+
+          if (
+            roomViewIsOpen &&
+            currentRoomId &&
+            String(message.roomId) === String(currentRoomId)
+          ) {
+            renderRoomMessage(message);
+            markCurrentRoomRead(message.id);
+          }
+
+          loadRooms();
+        });
+
+        socket.on('rooms changed', () => {
+          loadRooms();
+        });
+
+        socket.on('friends changed', () => {
+          loadFriends();
+
+          if (currentRoomId && roomInfoPanel.classList.contains('open')) {
+            loadRoomMembers();
+          }
+        });
+
+        socket.on('room message deleted', (payload) => {
+          if (!currentRoomId || String(payload.roomId) !== String(currentRoomId)) {
+            loadRooms();
+            return;
+          }
+
+          const item = roomMessages.querySelector(
+            `[data-message-id="${payload.messageId}"]`
+          );
+
+          if (!item) {
+            return;
+          }
+
+          const content = item.querySelector('.message-content');
+          const menu = item.querySelector('.message-menu');
+
+          content.textContent = '삭제된 메시지입니다.';
+
+          if (menu) {
+            menu.remove();
+          }
+
+          loadRooms();
         });
       }
 
-      loginButton.addEventListener('click', () => {
-        requestAuth('login');
-      });
+      async function loadFriends() {
+        try {
+          const response = await authFetch('/api/friends');
+          const data = await response.json();
 
-      signupButton.addEventListener('click', () => {
-        requestAuth('signup');
-      });
+          if (!response.ok) {
+            setPageMessage(data.message || '친구 목록 조회 실패');
+            return;
+          }
+
+          friendsList.innerHTML = '';
+          directFriendsList.innerHTML = '';
+          groupFriendsList.innerHTML = '';
+
+          if (data.friends.length === 0) {
+            friendsList.textContent = '아직 추가한 친구가 없습니다.';
+            directFriendsList.textContent = '1:1 채팅을 시작할 친구가 없습니다.';
+            groupFriendsList.textContent = '초대할 친구가 없습니다.';
+            return;
+          }
+
+          for (const friend of data.friends) {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+
+            const left = document.createElement('div');
+            left.className = 'profile-line';
+            left.appendChild(createAvatar(friend));
+
+            const text = document.createElement('div');
+            text.className = 'list-main';
+            text.innerHTML = `
+              <div class="list-title">${friend.nickname}</div>
+              <div class="list-sub">${friend.statusMessage || ''}</div>
+            `;
+
+            left.appendChild(text);
+
+            const actions = document.createElement('div');
+            actions.className = 'button-row';
+
+            const chatButton = document.createElement('button');
+            chatButton.className = 'small-button';
+            chatButton.type = 'button';
+            chatButton.textContent = '1:1 채팅';
+
+            chatButton.addEventListener('click', () => {
+              createDirectRoom(friend.id);
+            });
+
+            const deleteButton = document.createElement('button');
+            deleteButton.className = 'small-button';
+            deleteButton.type = 'button';
+            deleteButton.textContent = '삭제';
+
+            deleteButton.addEventListener('click', () => {
+              deleteFriend(friend.id);
+            });
+
+            actions.appendChild(chatButton);
+            actions.appendChild(deleteButton);
+
+            item.appendChild(left);
+            item.appendChild(actions);
+            friendsList.appendChild(item);
+
+            const directItem = document.createElement('div');
+            directItem.className = 'list-item';
+
+            const directLeft = document.createElement('div');
+            directLeft.className = 'profile-line';
+            directLeft.appendChild(createAvatar(friend));
+
+            const directText = document.createElement('div');
+            directText.className = 'list-main';
+            directText.innerHTML = `
+              <div class="list-title">${friend.nickname}</div>
+              <div class="list-sub">${friend.statusMessage || ''}</div>
+            `;
+
+            directLeft.appendChild(directText);
+
+            const directButton = document.createElement('button');
+            directButton.className = 'small-button';
+            directButton.type = 'button';
+            directButton.textContent = '채팅';
+
+            directButton.addEventListener('click', () => {
+              createDirectRoom(friend.id);
+            });
+
+            directItem.appendChild(directLeft);
+            directItem.appendChild(directButton);
+            directFriendsList.appendChild(directItem);
+
+            const checkItem = document.createElement('label');
+            checkItem.className = 'group-friend-item';
+            checkItem.innerHTML = `
+              <span class="list-title">${friend.nickname}</span>
+              <input type="checkbox" value="${friend.id}" class="group-friend-checkbox" />
+            `;
+
+            groupFriendsList.appendChild(checkItem);
+          }
+        } catch (e) {
+          setPageMessage('친구 목록 조회 중 서버 연결 실패');
+        }
+      }
+
+      async function loadRooms() {
+        try {
+          const response = await authFetch('/api/rooms');
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '채팅방 조회 실패');
+            return;
+          }
+
+          roomsList.innerHTML = '';
+
+          if (data.rooms.length === 0) {
+            roomsList.textContent = '아직 채팅방이 없습니다.';
+            return;
+          }
+
+          for (const room of data.rooms) {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+
+            const title = room.name || (room.type === 'direct' ? '1:1 채팅' : '단체 채팅');
+
+            item.innerHTML = `
+              <div class="list-main">
+                <div class="list-title">${title}</div>
+                <div class="list-sub">${room.lastMessage || '메시지 없음'}</div>
+              </div>
+            `;
+
+            if (room.unreadCount > 0) {
+              const badge = document.createElement('span');
+              badge.className = 'badge';
+              badge.textContent = room.unreadCount > 99 ? '99+' : room.unreadCount;
+              item.appendChild(badge);
+            }
+
+            item.addEventListener('click', () => {
+              openRoom(room.id, title);
+            });
+
+            roomsList.appendChild(item);
+          }
+        } catch (e) {
+          setPageMessage('채팅방 조회 중 서버 연결 실패');
+        }
+      }
+
+      async function loadRoomMembers() {
+        if (!currentRoomId) {
+          return;
+        }
+
+        try {
+          const response = await authFetch(`/api/rooms/${currentRoomId}/members`);
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '멤버 조회 실패');
+            return;
+          }
+
+          roomInfoPanel.innerHTML = '';
+
+          for (const member of data.members) {
+            const item = document.createElement('div');
+            item.className = 'list-item';
+
+            const left = document.createElement('div');
+            left.className = 'profile-line';
+            left.appendChild(createAvatar(member));
+
+            const text = document.createElement('div');
+            text.className = 'list-main';
+            text.innerHTML = `
+              <div class="list-title">${member.nickname}</div>
+              <div class="list-sub">${member.statusMessage || ''}</div>
+            `;
+
+            left.appendChild(text);
+
+            const right = document.createElement('div');
+            right.className = 'section';
+
+            const moreButton = document.createElement('button');
+            moreButton.className = 'small-button';
+            moreButton.type = 'button';
+            moreButton.textContent = '...';
+
+            const menu = document.createElement('div');
+            menu.className = 'member-menu';
+
+            const addButton = document.createElement('button');
+            addButton.className = 'small-button';
+            addButton.type = 'button';
+            addButton.textContent = member.isFriend ? '친구 추가됨' : '친구 추가';
+            addButton.disabled = member.isFriend || String(member.id) === String(currentUser.id);
+
+            addButton.addEventListener('click', () => {
+              addFriendByUserId(member.id);
+            });
+
+            const blockButton = document.createElement('button');
+            blockButton.className = 'small-button';
+            blockButton.type = 'button';
+            blockButton.textContent = member.isBlocked ? '차단됨' : '차단';
+            blockButton.disabled = member.isBlocked || String(member.id) === String(currentUser.id);
+
+            blockButton.addEventListener('click', () => {
+              blockUser(member.id);
+            });
+
+            moreButton.addEventListener('click', () => {
+              menu.classList.toggle('open');
+            });
+
+            menu.appendChild(addButton);
+            menu.appendChild(blockButton);
+            right.appendChild(moreButton);
+            right.appendChild(menu);
+
+            item.appendChild(left);
+            item.appendChild(right);
+            roomInfoPanel.appendChild(item);
+          }
+        } catch (e) {
+          setPageMessage('멤버 조회 중 서버 연결 실패');
+        }
+      }
+
+      async function addFriendByCode() {
+        const friendCode = friendCodeInput.value.trim();
+
+        try {
+          const response = await authFetch('/api/friends/by-code', {
+            method: 'POST',
+            body: JSON.stringify({ friendCode })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '친구 추가 실패');
+            return;
+          }
+
+          friendCodeInput.value = '';
+          setPageMessage('친구를 추가했습니다.', true);
+          loadFriends();
+        } catch (e) {
+          setPageMessage('친구 추가 중 서버 연결 실패');
+        }
+      }
+
+      async function addFriendByUserId(userId) {
+        try {
+          const response = await authFetch(`/api/friends/by-user/${userId}`, {
+            method: 'POST'
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '친구 추가 실패');
+            return;
+          }
+
+          setPageMessage('친구를 추가했습니다.', true);
+          loadFriends();
+          loadRoomMembers();
+        } catch (e) {
+          setPageMessage('친구 추가 중 서버 연결 실패');
+        }
+      }
+
+      async function deleteFriend(friendId) {
+        try {
+          const response = await authFetch(`/api/friends/${friendId}`, {
+            method: 'DELETE'
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '친구 삭제 실패');
+            return;
+          }
+
+          setPageMessage('친구를 삭제했습니다.', true);
+          loadFriends();
+        } catch (e) {
+          setPageMessage('친구 삭제 중 서버 연결 실패');
+        }
+      }
+
+      async function blockUser(userId) {
+        try {
+          const response = await authFetch(`/api/blocks/${userId}`, {
+            method: 'POST'
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '차단 실패');
+            return;
+          }
+
+          setPageMessage('사용자를 차단했습니다.', true);
+          loadFriends();
+          loadRooms();
+          loadRoomMembers();
+        } catch (e) {
+          setPageMessage('차단 중 서버 연결 실패');
+        }
+      }
+
+      async function createDirectRoom(friendId) {
+        try {
+          const response = await authFetch('/api/rooms/direct', {
+            method: 'POST',
+            body: JSON.stringify({ friendId })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '채팅방 생성 실패');
+            return;
+          }
+
+          setPageMessage('1:1 채팅방을 만들었습니다.', true);
+          directChatPanel.classList.remove('open');
+          groupChatPanel.classList.remove('open');
+          showView('rooms-view');
+          loadRooms();
+        } catch (e) {
+          setPageMessage('1:1 채팅방 생성 중 서버 연결 실패');
+        }
+      }
+
+      async function createGroupRoom() {
+        const checked = document.querySelectorAll('.group-friend-checkbox:checked');
+        const memberIds = [...checked].map((checkbox) => checkbox.value);
+
+        try {
+          const response = await authFetch('/api/rooms/group', {
+            method: 'POST',
+            body: JSON.stringify({
+              name: groupNameInput.value.trim(),
+              memberIds
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '단체 채팅방 생성 실패');
+            return;
+          }
+
+          groupNameInput.value = '';
+          checked.forEach((checkbox) => {
+            checkbox.checked = false;
+          });
+
+          setPageMessage('단체 채팅방을 만들었습니다.', true);
+          groupFriendsList.classList.remove('open');
+          directChatPanel.classList.remove('open');
+          groupChatPanel.classList.remove('open');
+          showView('rooms-view');
+          loadRooms();
+        } catch (e) {
+          setPageMessage('단체 채팅방 생성 중 서버 연결 실패');
+        }
+      }
+
+      async function openRoom(roomId, title) {
+        currentRoomId = roomId;
+        currentRoomLastMessageId = 0;
+        roomTitle.textContent = title;
+        roomNameInput.value = title;
+        roomMessages.innerHTML = '';
+        roomInfoPanel.innerHTML = '';
+        roomInfoPanel.classList.remove('open');
+
+        showView('room-view');
+
+        if (socket) {
+          socket.emit('join room', roomId);
+        }
+
+        try {
+          const response = await authFetch(`/api/rooms/${roomId}/messages`);
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '메시지 조회 실패');
+            return;
+          }
+
+          for (const message of data.messages) {
+            renderRoomMessage(message);
+          }
+
+          if (currentRoomLastMessageId > 0) {
+            markCurrentRoomRead(currentRoomLastMessageId);
+          }
+
+          loadRooms();
+        } catch (e) {
+          setPageMessage('메시지 조회 중 서버 연결 실패');
+        }
+      }
+
+      async function markCurrentRoomRead(lastReadMessageId) {
+        if (!currentRoomId || !lastReadMessageId) {
+          return;
+        }
+
+        await authFetch(`/api/rooms/${currentRoomId}/read`, {
+          method: 'POST',
+          body: JSON.stringify({ lastReadMessageId })
+        });
+
+        loadRooms();
+      }
+
+      async function renameCurrentRoom() {
+        if (!currentRoomId) {
+          return;
+        }
+
+        const name = roomNameInput.value.trim();
+
+        try {
+          const response = await authFetch(`/api/rooms/${currentRoomId}/name`, {
+            method: 'PATCH',
+            body: JSON.stringify({ name })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '채팅방 이름 변경 실패');
+            return;
+          }
+
+          roomTitle.textContent = data.room.name;
+          roomNameInput.value = data.room.name;
+
+          setPageMessage(data.message || '채팅방 이름을 변경했습니다.', true);
+          loadRooms();
+        } catch (e) {
+          setPageMessage('채팅방 이름 변경 중 서버 연결 실패');
+        }
+      }
+
+      async function leaveCurrentRoom() {
+        if (!currentRoomId) {
+          return;
+        }
+
+        try {
+          const response = await authFetch(`/api/rooms/${currentRoomId}/leave`, {
+            method: 'POST'
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '채팅방 나가기 실패');
+            return;
+          }
+
+          currentRoomId = null;
+          currentRoomLastMessageId = 0;
+          roomMessages.innerHTML = '';
+          roomInfoPanel.innerHTML = '';
+
+          setPageMessage('채팅방에서 나갔습니다.', true);
+          showView('rooms-view');
+          loadRooms();
+        } catch (e) {
+          setPageMessage('채팅방 나가기 중 서버 연결 실패');
+        }
+      }
+
+      async function deleteMessageForMe(messageId) {
+        if (!currentRoomId) {
+          return;
+        }
+
+        await authFetch(`/api/rooms/${currentRoomId}/messages/${messageId}/me`, {
+          method: 'DELETE'
+        });
+
+        loadRooms();
+      }
+
+      async function deleteMessageForEveryone(messageId) {
+        if (!currentRoomId) {
+          return;
+        }
+
+        const response = await authFetch(
+          `/api/rooms/${currentRoomId}/messages/${messageId}/everyone`,
+          { method: 'DELETE' }
+        );
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          setPageMessage(data.message || '모두에게서 삭제 실패');
+        }
+      }
+
+      async function saveNickname() {
+        const nickname = nicknameEditInput.value.trim();
+
+        try {
+          const response = await authFetch('/api/me/nickname', {
+            method: 'PATCH',
+            body: JSON.stringify({ nickname })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '닉네임 수정 실패');
+            return;
+          }
+
+          renderMe(data.user);
+          setPageMessage(data.message || '닉네임을 수정했습니다.', true);
+        } catch (e) {
+          setPageMessage('닉네임 수정 중 서버 연결 실패');
+        }
+      }
+
+      async function saveStatusMessage() {
+        const statusMessage = statusMessageInput.value.trim();
+
+        try {
+          const response = await authFetch('/api/me/status-message', {
+            method: 'PATCH',
+            body: JSON.stringify({ statusMessage })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '상태메시지 수정 실패');
+            return;
+          }
+
+          renderMe(data.user);
+          setPageMessage(data.message || '상태메시지를 수정했습니다.', true);
+        } catch (e) {
+          setPageMessage('상태메시지 수정 중 서버 연결 실패');
+        }
+      }
+
+      async function saveProfileImage() {
+        const profileImage = profileImageInput.value.trim();
+
+        try {
+          const response = await authFetch('/api/me/profile-image', {
+            method: 'PATCH',
+            body: JSON.stringify({ profileImage })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '프로필 이미지 수정 실패');
+            return;
+          }
+
+          renderMe(data.user);
+          setPageMessage(data.message || '프로필 이미지를 수정했습니다.', true);
+        } catch (e) {
+          setPageMessage('프로필 이미지 수정 중 서버 연결 실패');
+        }
+      }
+
+      async function saveUsername() {
+        try {
+          const response = await authFetch('/api/me/username', {
+            method: 'PATCH',
+            body: JSON.stringify({
+              newUsername: usernameEditInput.value.trim(),
+              currentPassword: usernamePasswordInput.value
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '아이디 변경 실패');
+            return;
+          }
+
+          loginToken = data.token;
+          localStorage.setItem('loginToken', loginToken);
+
+          renderMe(data.user);
+          usernamePasswordInput.value = '';
+          setPageMessage(data.message || '아이디를 변경했습니다.', true);
+        } catch (e) {
+          setPageMessage('아이디 변경 중 서버 연결 실패');
+        }
+      }
+
+      async function savePassword() {
+        try {
+          const response = await authFetch('/api/me/password', {
+            method: 'PATCH',
+            body: JSON.stringify({
+              currentPassword: currentPasswordInput.value,
+              newPassword: newPasswordInput.value,
+              newPasswordConfirm: newPasswordConfirmInput.value
+            })
+          });
+
+          const data = await response.json();
+
+          if (!response.ok) {
+            setPageMessage(data.message || '비밀번호 변경 실패');
+            return;
+          }
+
+          currentPasswordInput.value = '';
+          newPasswordInput.value = '';
+          newPasswordConfirmInput.value = '';
+          setPageMessage(data.message || '비밀번호를 변경했습니다.', true);
+        } catch (e) {
+          setPageMessage('비밀번호 변경 중 서버 연결 실패');
+        }
+      }
+
+      function logout() {
+        isLoggingOut = true;
+
+        localStorage.removeItem('loginToken');
+        loginToken = null;
+        currentUser = null;
+        currentRoomId = null;
+        currentRoomLastMessageId = 0;
+
+        if (socket) {
+          socket.disconnect();
+          socket = null;
+        }
+
+        // 오픈채팅 입장/퇴장 알림과 오픈채팅 메시지는 화면에만 쌓이는 로그다.
+        // 로그아웃하면 다음 로그인 때 이전 사용자의 오픈채팅 로그가 남지 않도록 초기화한다.
+        openMessages.innerHTML = '';
+
+        app.style.display = 'none';
+        authScreen.style.display = 'flex';
+        authMessage.textContent = '';
+        pageMessage.textContent = '';
+        passwordInput.value = '';
+      }
+
+      loginButton.addEventListener('click', () => requestAuth('login'));
+      signupButton.addEventListener('click', () => requestAuth('signup'));
 
       passwordInput.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
@@ -318,21 +1849,86 @@
         }
       });
 
-      form.addEventListener('submit', (e) => {
+      addFriendButton.addEventListener('click', addFriendByCode);
+
+      newChatButton.addEventListener('click', () => {
+        newChatMenu.classList.toggle('open');
+      });
+
+      directChatOptionButton.addEventListener('click', () => {
+        openNewChatPanel('direct');
+      });
+
+      groupChatOptionButton.addEventListener('click', () => {
+        openNewChatPanel('group');
+      });
+
+      toggleGroupFriendsButton.addEventListener('click', () => {
+        groupFriendsList.classList.toggle('open');
+      });
+
+      createGroupButton.addEventListener('click', createGroupRoom);
+      leaveRoomButton.addEventListener('click', leaveCurrentRoom);
+
+      roomInfoButton.addEventListener('click', () => {
+        roomInfoPanel.classList.toggle('open');
+
+        if (roomInfoPanel.classList.contains('open')) {
+          loadRoomMembers();
+        }
+      });
+
+      roomNameForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        renameCurrentRoom();
+      });
+
+      saveNicknameButton.addEventListener('click', saveNickname);
+      saveStatusMessageButton.addEventListener('click', saveStatusMessage);
+      saveProfileImageButton.addEventListener('click', saveProfileImage);
+      saveUsernameButton.addEventListener('click', saveUsername);
+      savePasswordButton.addEventListener('click', savePassword);
+      logoutButton.addEventListener('click', logout);
+
+      roomForm.addEventListener('submit', (e) => {
         e.preventDefault();
 
-        if (!socket || !input.value.trim()) {
+        if (!socket || !currentRoomId || !roomInput.value.trim()) {
           return;
         }
 
-        const msg = input.value;
-
-        socket.emit('chat message', msg, () => {
-          input.value = '';
+        socket.emit('room message', currentRoomId, roomInput.value, () => {
+          roomInput.value = '';
         });
-
-        input.value = '';
       });
+
+      openForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+
+        if (!socket || !openInput.value.trim()) {
+          return;
+        }
+
+        socket.emit('chat message', openInput.value, () => {
+          openInput.value = '';
+        });
+      });
+
+      tabButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          showView(button.dataset.view);
+
+          if (button.dataset.view === 'friends-view') {
+            loadFriends();
+          }
+
+          if (button.dataset.view === 'rooms-view') {
+            loadRooms();
+          }
+        });
+      });
+
+      loadMe();
     </script>
   </body>
 </html>
