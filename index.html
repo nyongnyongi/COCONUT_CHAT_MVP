@@ -14,9 +14,19 @@
         margin: 0;
         padding-bottom: 7rem;
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-        Helvetica, Arial, sans-serif;
-        background: #f5f8fb;
+          Helvetica, Arial, sans-serif;
         color: #17202a;
+        min-height: 100vh;
+        overflow-y: auto;
+
+        /* beach-bg.png is the generated beach background.
+           cover fills the viewport, fixed keeps the beach still while scrolling. */
+        background:
+          linear-gradient(
+            rgba(255, 255, 255, 0.08),
+            rgba(255, 255, 255, 0.2)
+          ),
+          url("beach-bg.png") center / cover fixed;
       }
 
       button {
@@ -43,19 +53,124 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: white;
+        padding: 1.5rem;
+
+        /* #auth-screen covers the whole page, so it needs the beach background too. */
+        background:
+          linear-gradient(
+            rgba(255, 255, 255, 0.04),
+            rgba(255, 255, 255, 0.14)
+          ),
+          url("beach-bg.png") center / cover fixed;
+      }
+
+      #auth-screen::before {
+        content: "Chat. Connect. Unwind.";
+        position: fixed;
+        left: clamp(2rem, 12vw, 11rem);
+        top: 54%;
+        width: min(34vw, 430px);
+        color: #102a43;
+        font-size: clamp(2rem, 3vw, 3rem);
+        font-weight: 800;
+        line-height: 1.18;
+        text-shadow: 0 2px 18px rgba(255, 255, 255, 0.5);
+      }
+
+      #auth-screen::after {
+        content: "Coconut Chat is a simple, fast, and secure way to connect with the people who matter.";
+        position: fixed;
+        left: clamp(2rem, 12vw, 11rem);
+        top: calc(54% + 5.4rem);
+        width: min(34vw, 430px);
+        color: #35516f;
+        font-size: 1rem;
+        line-height: 1.85;
+        text-shadow: 0 2px 18px rgba(255, 255, 255, 0.5);
       }
 
       #auth-box {
-        width: min(90vw, 380px);
+        width: min(92vw, 430px);
         display: grid;
-        gap: 0.75rem;
+        gap: 0.78rem;
+        padding: clamp(1.5rem, 4vw, 2.4rem);
+        border: 1px solid rgba(255, 255, 255, 0.72);
+        border-radius: 26px;
+
+        /* This glass card matches the reference login panel without changing login logic. */
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.82),
+          rgba(255, 255, 255, 0.7)
+        );
+        box-shadow: 0 28px 80px rgba(8, 57, 94, 0.28);
+        backdrop-filter: blur(20px);
+      }
+
+      #auth-logo {
+        width: 150px;
+        height: 150px;
+        margin: 0 auto -0.2rem;
+        object-fit: contain;
+        filter: drop-shadow(0 12px 18px rgba(66, 39, 12, 0.18));
       }
 
       #auth-title {
-        margin: 0 0 0.5rem;
+        margin: 0;
+        color: #102a43;
         text-align: center;
+        font-size: clamp(2rem, 5vw, 2.55rem);
+        font-weight: 850;
+        letter-spacing: 0;
       }
+
+      #auth-mark {
+        width: 42px;
+        height: 4px;
+        margin: 0.15rem auto 0.2rem;
+        border-radius: 999px;
+        background: rgba(43, 132, 189, 0.22);
+      }
+
+      #auth-subtitle {
+        margin: 0 0 0.35rem;
+        color: #6b7d90;
+        text-align: center;
+        font-size: 0.95rem;
+        font-weight: 600;
+      }
+
+      #auth-box input {
+        height: 3.25rem;
+        border: 1px solid rgba(138, 160, 182, 0.38);
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.82);
+        box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.04);
+      }
+
+      #auth-box input::placeholder {
+        color: #8797a8;
+      }
+
+
+      #auth-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+      }
+
+      #login-button {
+        background: linear-gradient(135deg, #2f73ff, #28a9ff);
+        box-shadow: 0 10px 22px rgba(30, 144, 255, 0.3);
+      }
+
+      #signup-button {
+        background: rgba(255, 255, 255, 0.86);
+        color: #137fe8;
+        border: 1px solid rgba(138, 160, 182, 0.32);
+      }
+
+
 
       #auth-actions,
       .button-row {
@@ -73,7 +188,7 @@
       .small-button {
         border: 0;
         border-radius: 10px;
-        background: #202734;
+        background: #111827;
         color: white;
         font-size: 1rem;
       }
@@ -94,9 +209,6 @@
         cursor: default;
       }
 
-      #signup-button {
-        background: #167a55;
-      }
 
       .danger-button {
         background: #a83232;
@@ -114,8 +226,19 @@
 
       #app {
         display: none;
-      }
+        width: min(100% - 2rem, 980px);
+        min-height: calc(100vh - 2rem);
+        margin: 1rem auto 7.5rem;
+        overflow: visible;
+        border: 1px solid rgba(255, 255, 255, 0.65);
+        border-radius: 28px;
 
+        /* 로그인 후 화면 전체를 하나의 큰 앱 패널로 묶는다.
+           JS 동작은 그대로 두고, 보이는 껍데기만 시안 쪽으로 바꾸는 부분이다. */
+        background: rgba(255, 255, 255, 0.68);
+        box-shadow: 0 24px 70px rgba(8, 57, 94, 0.25);
+        backdrop-filter: blur(18px);
+      }
       #top-bar {
         position: sticky;
         top: 0;
@@ -125,7 +248,7 @@
         justify-content: space-between;
         gap: 1rem;
         padding: 0.75rem 1rem;
-        background: rgba(255, 255, 255, 0.94);
+        background: rgba(255, 255, 255, 0.72);
         border-bottom: 1px solid #e3e8ef;
         backdrop-filter: blur(10px);
       }
@@ -187,7 +310,7 @@
 
       .view {
         display: none;
-        padding: 1rem;
+        padding: 1rem 1rem 8rem;
       }
 
       .view.active {
@@ -201,7 +324,7 @@
         padding: 1rem;
         border: 1px solid #e3e8ef;
         border-radius: 12px;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
       }
 
       .section-title {
@@ -223,7 +346,7 @@
         padding: 0.75rem;
         border: 1px solid #e3e8ef;
         border-radius: 12px;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
       }
 
       .list-main {
@@ -275,7 +398,7 @@
         padding: 0.5rem;
         border: 1px solid #e3e8ef;
         border-radius: 12px;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
         box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
       }
 
@@ -318,7 +441,7 @@
         padding: 0.65rem 0.75rem;
         border: 1px solid #e3e8ef;
         border-radius: 12px;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
       }
 
       .group-friend-item input {
@@ -388,7 +511,7 @@
         padding: 0.75rem 0.9rem;
         border: 1px solid #e3e8ef;
         border-radius: 18px;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
         word-break: break-word;
       }
 
@@ -405,7 +528,7 @@
         align-self: flex-start;
         margin-left: 0;
         margin-right: auto;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
       }
 
       .message-head {
@@ -491,9 +614,9 @@
         bottom: 3.7rem;
         left: 0;
         display: none;
-        gap: 0.85rem;
+        gap: 0.78rem;
         padding: 0.8rem 1rem;
-        background: rgba(245, 248, 251, 0.96);
+        background: rgba(255, 255, 255, 0.78);
         border-top: 1px solid #e3e8ef;
         backdrop-filter: blur(10px);
       }
@@ -526,7 +649,7 @@
         grid-template-columns: repeat(4, 1fr);
         gap: 0.25rem;
         padding: 0.45rem;
-        background: white;
+        background: rgba(255, 255, 255, 0.82);
         border-top: 1px solid #e3e8ef;
       }
 
@@ -534,15 +657,59 @@
         padding: 0.65rem 0.25rem;
         border: 0;
         border-radius: 10px;
-        background: #eef2f6;
+        background: rgba(255, 255, 255, 0.72);
         color: #333;
       }
 
       #bottom-tabs button.active {
-        background: #202734;
+        background: #111827;
         color: white;
       }
 
+
+
+      /* Final login screen polish.
+         These rules come late so older common button styles cannot override the login card. */
+      #auth-screen {
+        justify-content: flex-end;
+        padding-right: clamp(1.5rem, 9vw, 9rem);
+      }
+
+      #auth-box {
+        width: min(92vw, 430px);
+        gap: 0.78rem;
+      }
+
+      #auth-actions {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+
+      #login-button {
+        background: linear-gradient(135deg, #2f73ff, #28a9ff);
+        color: white;
+        box-shadow: 0 10px 22px rgba(30, 144, 255, 0.3);
+      }
+
+      #signup-button {
+        background: rgba(255, 255, 255, 0.9);
+        color: #137fe8;
+        border: 1px solid rgba(138, 160, 182, 0.32);
+      }
+
+
+      @media (max-width: 900px) {
+        #auth-screen {
+          justify-content: center;
+          padding-right: 1.5rem;
+        }
+      }
+      @media (max-width: 900px) {
+        #auth-screen::before,
+        #auth-screen::after {
+          display: none;
+        }
+      }
       @media (max-width: 720px) {
         #room-name-form,
         #room-header {
@@ -565,13 +732,442 @@
         padding-bottom: 6.5rem;
       }
 
+
+      /* Coconut Chat visual texture layer.
+         This block changes only the look: no HTML ids, API calls, or Socket.IO logic are changed. */
+      :root {
+        --coconut-ink: #102a43;
+        --coconut-muted: #6f8297;
+        --coconut-blue: #229aff;
+        --coconut-blue-deep: #1687ed;
+        --coconut-sky: #eaf8ff;
+        --coconut-glass: rgba(255, 255, 255, 0.72);
+        --coconut-card: rgba(255, 255, 255, 0.88);
+        --coconut-line: rgba(160, 193, 219, 0.5);
+        --coconut-shadow: 0 18px 48px rgba(11, 72, 112, 0.18);
+      }
+
+      body {
+        color: var(--coconut-ink);
+        font-weight: 500;
+        letter-spacing: 0;
+      }
+
+      input {
+        border-color: rgba(160, 193, 219, 0.62) !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        color: var(--coconut-ink);
+        box-shadow: inset 0 1px 2px rgba(16, 42, 67, 0.04),
+          0 6px 18px rgba(32, 125, 184, 0.08);
+      }
+
+      input::placeholder {
+        color: #8a9bad;
+      }
+
+      input:focus {
+        outline: 3px solid rgba(34, 154, 255, 0.18) !important;
+        border-color: rgba(34, 154, 255, 0.68) !important;
+      }
+
+      #app {
+        color: var(--coconut-ink);
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.7),
+          rgba(255, 255, 255, 0.58)
+        ) !important;
+        border: 1px solid rgba(255, 255, 255, 0.78) !important;
+        border-radius: 30px !important;
+        box-shadow: 0 28px 80px rgba(8, 57, 94, 0.26) !important;
+        backdrop-filter: blur(20px) saturate(1.12) !important;
+      }
+
+      #top-bar {
+        min-height: 5.6rem;
+        padding: 1rem 1.35rem !important;
+        background: linear-gradient(
+          180deg,
+          rgba(255, 255, 255, 0.72),
+          rgba(255, 255, 255, 0.4)
+        ) !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.45) !important;
+      }
+
+      #my-nickname,
+      #room-title,
+      .section-title,
+      .list-title,
+      .message-sender {
+        color: var(--coconut-ink);
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      #my-meta,
+      .list-sub,
+      .message-meta-row {
+        color: var(--coconut-muted) !important;
+      }
+
+      #my-profile-image,
+      #my-profile-placeholder,
+      .avatar,
+      .avatar-placeholder {
+        box-shadow: 0 9px 24px rgba(9, 82, 126, 0.16);
+        border: 2px solid rgba(255, 255, 255, 0.82);
+      }
+
+      .section,
+      .list-item,
+      .group-friend-item,
+      #new-chat-menu {
+        border: 1px solid var(--coconut-line) !important;
+        border-radius: 18px !important;
+        background: var(--coconut-card) !important;
+        box-shadow: 0 10px 28px rgba(11, 72, 112, 0.1);
+      }
+
+      .section {
+        padding: 1.15rem !important;
+      }
+
+      .primary-button,
+      #auth-actions button,
+      #room-form button,
+      #open-form button,
+      #new-chat-button,
+      #add-friend-button,
+      #create-group-button,
+      #save-nickname-button,
+      #save-status-message-button,
+      #save-profile-image-button,
+      #save-username-button,
+      #save-password-button {
+        border: 0 !important;
+        border-radius: 999px !important;
+        background: linear-gradient(135deg, #2f73ff, #28a9ff) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        box-shadow: 0 12px 24px rgba(30, 144, 255, 0.26) !important;
+      }
+
+      .primary-button:hover,
+      #room-form button:hover,
+      #open-form button:hover,
+      #new-chat-button:hover {
+        filter: brightness(1.03);
+        transform: translateY(-1px);
+      }
+
+      .small-button {
+        border-radius: 999px !important;
+        background: rgba(255, 255, 255, 0.88) !important;
+        color: var(--coconut-ink) !important;
+        border: 1px solid rgba(160, 193, 219, 0.55) !important;
+        font-weight: 750 !important;
+      }
+
+      .danger-button {
+        border-radius: 999px !important;
+        background: linear-gradient(135deg, #ff6570, #d9344a) !important;
+        color: white !important;
+        font-weight: 800 !important;
+        box-shadow: 0 10px 22px rgba(217, 52, 74, 0.2) !important;
+      }
+
+      #room-header {
+        display: grid !important;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 1rem;
+        margin: -0.2rem 0 1.1rem !important;
+        padding: 1.2rem !important;
+        border-radius: 24px !important;
+        background: linear-gradient(
+          180deg,
+          rgba(234, 248, 255, 0.9),
+          rgba(255, 255, 255, 0.54)
+        ) !important;
+        border: 1px solid rgba(255, 255, 255, 0.7) !important;
+        box-shadow: 0 14px 36px rgba(11, 72, 112, 0.1);
+      }
+
+      #room-title {
+        font-size: clamp(1.7rem, 4vw, 2.6rem) !important;
+        text-align: center;
+      }
+
+      #room-title::after {
+        content: "";
+        display: block;
+        width: 4rem;
+        height: 0.35rem;
+        margin: 0.6rem auto 0;
+        border-radius: 999px;
+        background: rgba(34, 154, 255, 0.18);
+      }
+
+      #room-messages,
+      #open-messages {
+        gap: 0.48rem !important;
+        padding: 1rem 0 8rem !important;
+      }
+
+      .message-row {
+        max-width: min(72%, 560px) !important;
+        padding: 0.9rem 1.05rem !important;
+        border-radius: 20px !important;
+        border: 1px solid rgba(218, 228, 237, 0.78) !important;
+        background: rgba(255, 255, 255, 0.94) !important;
+        color: #283746 !important;
+        box-shadow: 0 10px 26px rgba(20, 64, 96, 0.12) !important;
+      }
+
+      .message-row.theirs {
+        align-self: flex-start !important;
+        margin-left: 0 !important;
+        margin-right: auto !important;
+        border-top-left-radius: 8px !important;
+      }
+
+      .message-row.mine {
+        align-self: flex-end !important;
+        margin-left: auto !important;
+        margin-right: 0 !important;
+        border-top-right-radius: 8px !important;
+        border-color: rgba(34, 154, 255, 0.55) !important;
+        background: linear-gradient(135deg, #1f8fff, #28b7ff) !important;
+        color: white !important;
+        box-shadow: 0 14px 28px rgba(30, 144, 255, 0.28) !important;
+      }
+
+      .message-row.mine .message-sender,
+      .message-row.mine .message-content,
+      .message-row.mine .message-menu-button {
+        color: white !important;
+      }
+
+      .message-content {
+        font-size: 1.02rem;
+        line-height: 1.55;
+      }
+
+      .message-menu-button {
+        background: rgba(255, 255, 255, 0.34) !important;
+        color: var(--coconut-ink);
+      }
+
+      .message-meta-row {
+        font-size: 0.78rem !important;
+      }
+
+      .message-unread-count {
+        color: #0d8bf2 !important;
+        font-weight: 900 !important;
+      }
+
+      .system-message {
+        border: 1px solid rgba(202, 224, 241, 0.7) !important;
+        background: rgba(234, 248, 255, 0.86) !important;
+        color: #6a7c8d !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.65);
+      }
+
+      #room-form,
+      #open-form {
+        left: 50% !important;
+        right: auto !important;
+        bottom: 4.15rem !important;
+        width: min(100% - 2rem, 980px) !important;
+        transform: translateX(-50%);
+        gap: 1rem !important;
+        padding: 0.9rem 1.1rem !important;
+        border: 1px solid rgba(255, 255, 255, 0.72) !important;
+        border-radius: 24px 24px 0 0 !important;
+        background: rgba(255, 255, 255, 0.82) !important;
+        box-shadow: 0 -14px 34px rgba(9, 82, 126, 0.14);
+        backdrop-filter: blur(18px) !important;
+      }
+
+      #room-input,
+      #open-input {
+        min-height: 3.4rem;
+        padding: 0 1.2rem !important;
+        border-radius: 999px !important;
+        font-size: 1rem;
+      }
+
+      #room-form button,
+      #open-form button {
+        min-width: 6.25rem !important;
+        min-height: 3.4rem;
+        font-size: 1rem;
+      }
+
+      #bottom-tabs {
+        left: 50% !important;
+        right: auto !important;
+        width: min(100% - 2rem, 980px) !important;
+        transform: translateX(-50%);
+        padding: 0.55rem !important;
+        border: 1px solid rgba(255, 255, 255, 0.72) !important;
+        border-radius: 0 0 24px 24px !important;
+        background: rgba(255, 255, 255, 0.86) !important;
+        box-shadow: 0 -10px 24px rgba(9, 82, 126, 0.1);
+        backdrop-filter: blur(18px) !important;
+      }
+
+      #bottom-tabs button {
+        border-radius: 999px !important;
+        background: rgba(234, 248, 255, 0.8) !important;
+        color: var(--coconut-muted) !important;
+        font-weight: 800 !important;
+      }
+
+      #bottom-tabs button.active {
+        background: linear-gradient(135deg, #1f8fff, #28b7ff) !important;
+        color: white !important;
+        box-shadow: 0 8px 18px rgba(30, 144, 255, 0.22);
+      }
+
+      @media (max-width: 720px) {
+        #app,
+        #room-form,
+        #open-form,
+        #bottom-tabs {
+          width: calc(100% - 0.7rem) !important;
+        }
+
+        #app {
+          margin-top: 0.35rem;
+          border-radius: 22px !important;
+        }
+
+        #top-bar {
+          padding: 0.85rem !important;
+        }
+
+        #room-header {
+          grid-template-columns: 1fr !important;
+        }
+
+        #room-title {
+          font-size: 1.65rem !important;
+        }
+
+        .message-row {
+          max-width: 84% !important;
+        }
+      }
+
+      /* Final small polish after the first texture pass. */
+      #top-bar {
+        justify-content: space-between !important;
+      }
+
+      #app-brand {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 0;
+        flex: 1 1 auto;
+      }
+
+      #app-brand-logo {
+        width: 54px;
+        height: 54px;
+        object-fit: contain;
+        filter: drop-shadow(0 8px 12px rgba(66, 39, 12, 0.15));
+      }
+
+      #app-brand-name {
+        color: var(--coconut-ink);
+        font-size: clamp(1.3rem, 2.4vw, 2rem);
+        font-weight: 850;
+        white-space: nowrap;
+      }
+
+      #my-profile {
+        flex: 0 1 auto;
+      }
+
+      #room-header {
+        grid-template-columns: minmax(0, 1fr) auto !important;
+        padding: 0.9rem 1rem !important;
+      }
+
+      #room-title {
+        text-align: left !important;
+        font-size: clamp(1.2rem, 2.4vw, 1.65rem) !important;
+        line-height: 1.25 !important;
+      }
+
+      #room-title::after {
+        width: 2.2rem !important;
+        height: 0.22rem !important;
+        margin: 0.35rem 0 0 !important;
+      }
+
+      #auth-logo {
+        filter: drop-shadow(0 10px 14px rgba(66, 39, 12, 0.12));
+      }
+
+      @media (max-width: 720px) {
+        #top-bar {
+          align-items: flex-start;
+          flex-wrap: wrap;
+        }
+
+        #app-brand {
+          width: 100%;
+        }
+
+        #app-brand-logo {
+          width: 46px;
+          height: 46px;
+        }
+
+        #app-brand-name {
+          font-size: 1.35rem;
+        }
+      }
+
+      /* Quick final fixes: keep rounded app corners clean and make the logo use the original color asset. */
+      #app {
+        overflow: clip !important;
+      }
+
+      #top-bar {
+        border-radius: 30px 30px 0 0 !important;
+        overflow: hidden !important;
+        background-clip: padding-box !important;
+      }
+
+      #app-brand-logo,
+      #auth-logo {
+        filter: drop-shadow(0 8px 12px rgba(66, 39, 12, 0.14)) !important;
+      }
+
+      #room-view,
+      #open-view,
+      #friends-view,
+      #rooms-view,
+      #settings-view {
+        overflow: visible !important;
+      }
     </style>
   </head>
 
   <body>
     <div id="auth-screen">
       <div id="auth-box">
+        <!-- This logo is only decorative. Login/signup JavaScript still uses the same input/button ids below. -->
+        <img id="auth-logo" src="coconut-logo-clean.png" alt="Coconut Chat 로고" />
+
         <h1 id="auth-title">Coconut Chat</h1>
+        <div id="auth-mark"></div>
+        <p id="auth-subtitle">Welcome back! Please sign in.</p>
 
         <input id="username-input" autocomplete="username" placeholder="아이디" />
 
@@ -582,17 +1178,23 @@
           placeholder="비밀번호 6자리 이상"
         />
 
+
         <div id="auth-actions">
-          <button id="login-button" type="button">로그인</button>
-          <button id="signup-button" type="button">회원가입</button>
+          <button id="login-button" type="button">Sign In</button>
+          <button id="signup-button" type="button">Sign up</button>
         </div>
+
 
         <p id="auth-message"></p>
       </div>
     </div>
-
     <div id="app">
       <div id="top-bar">
+        <div id="app-brand">
+          <!-- App brand only changes the header look. Existing profile/chat logic below stays the same. -->
+          <img id="app-brand-logo" src="coconut-logo-clean.png" alt="Coconut Chat 로고" />
+          <strong id="app-brand-name">Coconut Chat</strong>
+        </div>
         <div id="my-profile">
           <div id="my-profile-placeholder">?</div>
           <img id="my-profile-image" alt="프로필" />
