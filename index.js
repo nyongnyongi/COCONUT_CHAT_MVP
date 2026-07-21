@@ -62,7 +62,7 @@ function signPayload(payloadBase64) {
 
 function createToken(user) {
   const payloadBase64 = encodePayload({
-    id: user.id,
+    id: String(user.id),
     username: user.username,
     createdAt: Date.now()
   });
@@ -103,7 +103,7 @@ function verifyToken(token) {
     }
 
     return {
-      id: payload.id,
+      id: String(payload.id),
       username: payload.username
     };
   } catch (e) {
@@ -132,7 +132,7 @@ async function createUniqueFriendCode() {
 
 function toPublicUser(user) {
   return {
-    id: user.id,
+    id: String(user.id),
     username: user.username,
     nickname: user.nickname || user.username,
     profileImage: user.profile_image || '',
@@ -143,11 +143,12 @@ function toPublicUser(user) {
 
 function toPublicMessage(message) {
   return {
-    id: message.id,
-    roomId: message.room_id,
-    senderId: message.sender_id,
+    id: String(message.id),
+    roomId: String(message.room_id),
+    senderId: String(message.sender_id),
     senderName: message.sender_name,
     profileImage: message.profile_image || '',
+    unreadCount: Number(message.unread_count || 0),
     content: message.deleted_for_everyone
       ? '삭제된 메시지입니다.'
       : message.content,
@@ -229,16 +230,11 @@ async function getActiveRoomMemberIds(roomId) {
     [roomId]
   );
 
-  return result.rows.map((row) => row.user_id);
+  return result.rows.map((row) => String(row.user_id));
 }
 
 function joinUserPersonalRoom(socket) {
   socket.join(`user:${socket.user.id}`);
-}
-
-function emitUserStateChanged(userId) {
-  io.to(`user:${userId}`).emit('friends changed');
-  io.to(`user:${userId}`).emit('rooms changed');
 }
 
 async function joinUserChatRooms(socket) {
@@ -255,6 +251,11 @@ async function joinUserChatRooms(socket) {
   for (const row of result.rows) {
     socket.join(`room:${row.room_id}`);
   }
+}
+
+function emitUserStateChanged(userId) {
+  io.to(`user:${userId}`).emit('friends changed');
+  io.to(`user:${userId}`).emit('rooms changed');
 }
 
 async function initDb() {
@@ -323,9 +324,6 @@ async function initDb() {
     );
   `);
 
-  await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_for_everyone BOOLEAN DEFAULT false;');
-  await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;');
-
   await pool.query(`
     CREATE TABLE IF NOT EXISTS room_message_deletions (
       message_id BIGINT REFERENCES room_messages(id) ON DELETE CASCADE,
@@ -334,6 +332,9 @@ async function initDb() {
       PRIMARY KEY (message_id, user_id)
     );
   `);
+
+  await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_for_everyone BOOLEAN DEFAULT false;');
+  await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;');
 
   await pool.query('UPDATE users SET nickname = username WHERE nickname IS NULL;');
   await pool.query("UPDATE users SET profile_image = '' WHERE profile_image IS NULL;");
@@ -559,7 +560,10 @@ app.patch('/api/me/username', requireAuth, async (req, res) => {
     );
 
     const currentUser = currentUserResult.rows[0];
-    const passwordOk = await bcrypt.compare(currentPassword, currentUser.password_hash);
+    const passwordOk = await bcrypt.compare(
+      currentPassword,
+      currentUser.password_hash
+    );
 
     if (!passwordOk) {
       return res.status(401).json({
@@ -629,7 +633,10 @@ app.patch('/api/me/password', requireAuth, async (req, res) => {
     );
 
     const user = result.rows[0];
-    const passwordOk = await bcrypt.compare(currentPassword, user.password_hash);
+    const passwordOk = await bcrypt.compare(
+      currentPassword,
+      user.password_hash
+    );
 
     if (!passwordOk) {
       return res.status(401).json({
@@ -1018,8 +1025,8 @@ app.post('/api/rooms/direct', requireAuth, async (req, res) => {
       [room.id, req.user.id, friendId]
     );
 
-    emitUserStateChanged(req.user.id);
-    emitUserStateChanged(friendId);
+    io.to(`user:${req.user.id}`).emit('rooms changed');
+    io.to(`user:${friendId}`).emit('rooms changed');
 
     return res.status(201).json({
       room
@@ -1038,7 +1045,6 @@ app.post('/api/rooms/group', requireAuth, async (req, res) => {
   const memberIds = Array.isArray(req.body.memberIds)
     ? req.body.memberIds.map(String)
     : [];
-
   const uniqueMemberIds = [...new Set([String(req.user.id), ...memberIds])];
 
   if (uniqueMemberIds.length < 2) {
@@ -1109,7 +1115,7 @@ app.post('/api/rooms/group', requireAuth, async (req, res) => {
         [room.id, userId]
       );
 
-      emitUserStateChanged(userId);
+      io.to(`user:${userId}`).emit('rooms changed');
     }
 
     return res.status(201).json({
@@ -1160,7 +1166,7 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
 
     return res.json({
       rooms: result.rows.map((room) => ({
-        id: room.id,
+        id: String(room.id),
         name: room.name,
         type: room.type,
         unreadCount: Number(room.unread_count || 0),
@@ -1257,7 +1263,15 @@ app.get('/api/rooms/:roomId/messages', requireAuth, async (req, res) => {
         u.profile_image,
         m.content,
         m.deleted_for_everyone,
-        m.created_at
+        m.created_at,
+        (
+          SELECT COUNT(*)
+          FROM room_members reader
+          WHERE reader.room_id = m.room_id
+            AND reader.left_at IS NULL
+            AND reader.user_id <> m.sender_id
+            AND COALESCE(reader.last_read_message_id, 0) < m.id
+        ) AS unread_count
       FROM room_messages m
       LEFT JOIN users u ON u.id = m.sender_id
       LEFT JOIN room_message_deletions d
@@ -1306,6 +1320,12 @@ app.post('/api/rooms/:roomId/read', requireAuth, async (req, res) => {
       [lastReadMessageId, roomId, req.user.id]
     );
 
+    io.to(`room:${roomId}`).emit('room read', {
+      roomId: String(roomId),
+      userId: String(req.user.id),
+      lastReadMessageId
+    });
+
     return res.json({
       message: '읽음 처리했습니다.'
     });
@@ -1350,12 +1370,17 @@ app.patch('/api/rooms/:roomId/name', requireAuth, async (req, res) => {
     const memberIds = await getActiveRoomMemberIds(roomId);
 
     for (const memberId of memberIds) {
-      emitUserStateChanged(memberId);
+      io.to(`user:${memberId}`).emit('rooms changed');
     }
 
     return res.json({
       message: '채팅방 이름을 변경했습니다.',
-      room: result.rows[0]
+      room: {
+        id: String(result.rows[0].id),
+        name: result.rows[0].name,
+        type: result.rows[0].type,
+        createdAt: result.rows[0].created_at
+      }
     });
   } catch (e) {
     console.error('room rename error:', e);
@@ -1388,7 +1413,7 @@ app.post('/api/rooms/:roomId/leave', requireAuth, async (req, res) => {
       [roomId, req.user.id]
     );
 
-    emitUserStateChanged(req.user.id);
+    io.to(`user:${req.user.id}`).emit('rooms changed');
 
     return res.json({
       message: '채팅방에서 나갔습니다.'
@@ -1482,8 +1507,8 @@ app.delete('/api/rooms/:roomId/messages/:messageId/everyone', requireAuth, async
     );
 
     io.to(`room:${roomId}`).emit('room message deleted', {
-      roomId,
-      messageId,
+      roomId: String(roomId),
+      messageId: String(messageId),
       mode: 'everyone'
     });
 
@@ -1516,14 +1541,14 @@ io.on('connection', async (socket) => {
     return;
   }
 
-  socket.user = user;
+  socket.user = toPublicUser(user);
 
   joinUserPersonalRoom(socket);
   await joinUserChatRooms(socket);
 
   io.emit(
     'system message',
-    `[${user.nickname || user.username}] 님이 오픈채팅에 들어왔습니다.`
+    `[${socket.user.nickname || socket.user.username}] 님이 오픈채팅에 들어왔습니다.`
   );
 
   socket.on('chat message', async (msg, callback) => {
@@ -1537,7 +1562,12 @@ io.on('connection', async (socket) => {
     const latestUser = await getUserById(socket.user.id);
     const displayName = latestUser?.nickname || socket.user.username;
 
-    io.emit('chat message', displayName, safeMsg);
+    io.emit('chat message', {
+      senderId: String(socket.user.id),
+      senderName: displayName,
+      content: safeMsg,
+      createdAt: new Date().toISOString()
+    });
 
     callback?.();
   });
@@ -1590,19 +1620,19 @@ io.on('connection', async (socket) => {
 
       const savedMessage = insertResult.rows[0];
       const latestUser = await getUserById(socket.user.id);
+      const memberIds = await getActiveRoomMemberIds(roomId);
 
       const publicMessage = toPublicMessage({
         ...savedMessage,
         sender_name: latestUser.nickname || latestUser.username,
-        profile_image: latestUser.profile_image
+        profile_image: latestUser.profile_image,
+        unread_count: Math.max(memberIds.length - 1, 0)
       });
 
       io.to(`room:${roomId}`).emit('room message', publicMessage);
 
-      const memberIds = await getActiveRoomMemberIds(roomId);
-
       for (const memberId of memberIds) {
-        emitUserStateChanged(memberId);
+        io.to(`user:${memberId}`).emit('rooms changed');
       }
 
       callback?.({
