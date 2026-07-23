@@ -246,6 +246,38 @@
         box-shadow: 0 24px 70px rgba(8, 57, 94, 0.25);
         backdrop-filter: blur(18px);
       }
+
+      #top-actions {
+        position: relative;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+        flex: 0 0 auto;
+      }
+
+      #total-unread-badge {
+        position: absolute;
+        top: -0.35rem;
+        right: -0.35rem;
+        min-width: 1.35rem;
+        height: 1.35rem;
+        display: none;
+        place-items: center;
+        padding: 0 0.38rem;
+        border: 2px solid rgba(255, 255, 255, 0.95);
+        border-radius: 999px;
+        background: #e53935;
+        color: white;
+        font-size: 0.74rem;
+        font-weight: 900;
+        line-height: 1;
+        box-shadow: 0 7px 18px rgba(229, 57, 53, 0.28);
+        z-index: 2;
+      }
+
+      #total-unread-badge.visible {
+        display: grid;
+      }
       #top-bar {
         position: sticky;
         top: 0;
@@ -1356,6 +1388,63 @@
           min-width: 0;
         }
       }
+
+      /* 버튼은 화면이 좁아져도 글자가 두 줄로 꺾이지 않게 한다.
+         너무 긴 글자는 버튼 안에서 ... 처리해서 비율을 유지한다. */
+      button,
+      .primary-button,
+      .danger-button,
+      .small-button,
+      #auth-actions button,
+      #bottom-tabs button,
+      #room-form button,
+      #open-form button,
+      #new-chat-button,
+      #add-friend-button,
+      #create-group-button,
+      #toggle-group-friends-button,
+      #save-nickname-button,
+      #save-status-message-button,
+      #save-profile-image-button,
+      #save-username-button,
+      #save-password-button,
+      #logout-button {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      @media (max-width: 520px) {
+        #auth-actions {
+          grid-template-columns: 1fr 1fr;
+        }
+
+        #auth-actions button {
+          min-width: 0;
+        }
+
+        .button-row {
+          flex-wrap: nowrap;
+        }
+
+        .button-row button {
+          min-width: 0;
+          flex: 1 1 0;
+        }
+
+        #room-form button,
+        #open-form button {
+          flex: 0 0 auto;
+        }
+
+        #bottom-tabs {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+
+        #bottom-tabs button {
+          min-width: 0;
+        }
+      }
     </style>
   </head>
 
@@ -1414,10 +1503,14 @@
             </div>
           </div>
         </div>
+        <div id="top-actions">
+          <!-- 전체 안 읽은 개수 배지. loadRooms()에서 모든 채팅방 unreadCount를 합산해서 표시한다. -->
+          <span id="total-unread-badge" aria-label="안 읽은 채팅 0개">0</span>
 
-        <button id="logout-button" class="danger-button" type="button">
-          로그아웃
-        </button>
+          <button id="logout-button" class="danger-button" type="button">
+            로그아웃
+          </button>
+        </div>
       </div>
 
       <p id="page-message"></p>
@@ -1623,6 +1716,7 @@
       const myNickname = document.getElementById('my-nickname');
       const myMeta = document.getElementById('my-meta');
       const copyFriendCodeButton = document.getElementById('copy-friend-code-button');
+      const totalUnreadBadge = document.getElementById('total-unread-badge');
       const logoutButton = document.getElementById('logout-button');
 
       const friendCodeInput = document.getElementById('friend-code-input');
@@ -1786,6 +1880,23 @@
             setPageMessage('친구 코드 복사에 실패했습니다.');
           }
         }
+      }
+
+      // 모든 개별/단체 채팅방의 안 읽은 메시지 수를 합산해서 우측 상단 배지에 표시한다.
+      // 값이 0이면 배지를 숨기고, 99개를 넘으면 99+로 줄여서 레이아웃이 깨지지 않게 한다.
+      function updateTotalUnreadBadge(totalUnreadCount) {
+        const count = Number(totalUnreadCount || 0);
+
+        if (count <= 0) {
+          totalUnreadBadge.textContent = '0';
+          totalUnreadBadge.classList.remove('visible');
+          totalUnreadBadge.setAttribute('aria-label', '안 읽은 채팅 0개');
+          return;
+        }
+
+        totalUnreadBadge.textContent = count > 99 ? '99+' : String(count);
+        totalUnreadBadge.classList.add('visible');
+        totalUnreadBadge.setAttribute('aria-label', `안 읽은 채팅 ${count}개`);
       }
 
       function showView(viewId) {
@@ -2313,6 +2424,12 @@
           }
 
           roomsList.innerHTML = '';
+
+          const totalUnreadCount = data.rooms.reduce((sum, room) => {
+            return sum + Number(room.unreadCount || 0);
+          }, 0);
+
+          updateTotalUnreadBadge(totalUnreadCount);
 
           if (data.rooms.length === 0) {
             roomsList.textContent = '아직 채팅방이 없습니다.';
@@ -2865,6 +2982,7 @@
         }
 
         openMessages.innerHTML = '';
+        updateTotalUnreadBadge(0);
 
         app.style.display = 'none';
         authScreen.style.display = 'flex';
