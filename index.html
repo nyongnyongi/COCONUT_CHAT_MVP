@@ -1198,6 +1198,164 @@
       #settings-view {
         overflow: visible !important;
       }
+
+      /* Mobile fit polish.
+         전체 화면을 사진처럼 통째로 축소하지 않고, 터치 가능한 크기는 유지하면서
+         좁은 화면에서 글자와 카드가 삐져나오지 않도록 여백과 폰트만 조정한다. */
+      @media (max-width: 520px) {
+        body {
+          font-size: 14px;
+          padding-bottom: 6.5rem;
+        }
+
+        input,
+        button {
+          font-size: 0.9rem;
+        }
+
+        #app {
+          width: calc(100% - 0.75rem);
+          min-height: calc(100vh - 0.7rem);
+          margin: 0.35rem auto 6.5rem;
+          border-radius: 22px !important;
+        }
+
+        #top-bar {
+          min-height: auto;
+          padding: 0.75rem !important;
+          gap: 0.6rem;
+        }
+
+        #app-brand strong {
+          max-width: 145px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          font-size: 0.95rem;
+        }
+
+        #app-brand img {
+          width: 2.25rem;
+          height: 2.25rem;
+        }
+
+        #my-profile {
+          min-width: 0;
+          gap: 0.55rem;
+        }
+
+        #my-profile-image,
+        #my-profile-placeholder,
+        .avatar,
+        .avatar-placeholder {
+          width: 36px;
+          height: 36px;
+        }
+
+        #my-nickname,
+        #my-meta,
+        .friend-code-row,
+        .list-title,
+        .list-sub,
+        #room-title {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+
+        #my-nickname,
+        #room-title,
+        .section-title,
+        .list-title {
+          font-size: 0.95rem;
+        }
+
+        #my-meta,
+        .friend-code-row,
+        .list-sub,
+        .message-meta-row,
+        #page-message,
+        #auth-message {
+          font-size: 0.78rem;
+        }
+
+        #copy-friend-code-button {
+          width: 1.45rem;
+          height: 1.45rem;
+          flex: 0 0 auto;
+        }
+
+        .view {
+          padding: 0.75rem 0.75rem 8rem;
+        }
+
+        .section {
+          padding: 0.75rem;
+          border-radius: 10px;
+        }
+
+        .list-item,
+        .group-friend-item {
+          padding: 0.65rem;
+          gap: 0.55rem;
+        }
+
+        .button-row {
+          gap: 0.45rem;
+          flex-wrap: wrap;
+        }
+
+        .primary-button,
+        .danger-button,
+        .small-button,
+        #bottom-tabs button,
+        #room-form button,
+        #open-form button {
+          font-size: 0.82rem;
+          white-space: nowrap;
+        }
+
+        #bottom-tabs button {
+          min-width: 0;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+
+        #room-header,
+        #room-name-form {
+          gap: 0.55rem;
+        }
+
+        .message-row {
+          max-width: 86%;
+          padding: 0.65rem 0.78rem;
+          border-radius: 16px;
+          font-size: 0.92rem;
+        }
+
+        .message-menu-button {
+          width: 1.75rem;
+          height: 1.75rem;
+        }
+
+        #room-form,
+        #open-form {
+          gap: 0.55rem;
+          padding: 0.65rem 0.75rem;
+        }
+
+        #room-form button,
+        #open-form button {
+          min-width: 4.8rem !important;
+          min-height: 3rem;
+        }
+
+        #room-input,
+        #open-input {
+          min-width: 0;
+        }
+      }
     </style>
   </head>
 
