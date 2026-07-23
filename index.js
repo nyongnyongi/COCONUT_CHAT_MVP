@@ -393,6 +393,7 @@ async function initDb() {
       name TEXT,
       type TEXT NOT NULL CHECK (type IN ('direct', 'group')),
       created_by BIGINT REFERENCES users(id) ON DELETE SET NULL,
+      custom_name BOOLEAN DEFAULT false,
       created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
@@ -402,6 +403,7 @@ async function initDb() {
       room_id BIGINT REFERENCES rooms(id) ON DELETE CASCADE,
       user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
       last_read_message_id BIGINT DEFAULT 0,
+      custom_room_name TEXT,
       joined_at TIMESTAMPTZ DEFAULT now(),
       left_at TIMESTAMPTZ,
       PRIMARY KEY (room_id, user_id)
@@ -442,6 +444,9 @@ async function initDb() {
 
   await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_for_everyone BOOLEAN DEFAULT false;');
   await pool.query('ALTER TABLE room_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;');
+  await pool.query('ALTER TABLE rooms ADD COLUMN IF NOT EXISTS custom_name BOOLEAN DEFAULT false;');
+  await pool.query('ALTER TABLE room_members ADD COLUMN IF NOT EXISTS custom_room_name TEXT;');
+  await pool.query('UPDATE rooms SET custom_name = false WHERE custom_name IS NULL;');
 
   await pool.query('UPDATE users SET nickname = username WHERE nickname IS NULL;');
   await pool.query("UPDATE users SET profile_image = '' WHERE profile_image IS NULL;");
@@ -1289,6 +1294,7 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
       SELECT
         r.id,
         CASE
+          WHEN NULLIF(rm.custom_room_name, '') IS NOT NULL THEN rm.custom_room_name
           WHEN r.type = 'direct' THEN COALESCE(other_user.nickname, other_user.username, r.name)
           ELSE r.name
         END AS display_name,
@@ -1320,7 +1326,7 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
       LEFT JOIN room_messages msg ON msg.room_id = r.id
       WHERE rm.user_id = $1
         AND rm.left_at IS NULL
-      GROUP BY r.id, rm.last_read_message_id, other_user.nickname, other_user.username
+      GROUP BY r.id, rm.custom_room_name, rm.last_read_message_id, other_user.nickname, other_user.username
       ORDER BY last_message_id DESC, r.created_at DESC
       `,
       [req.user.id]
@@ -1521,27 +1527,23 @@ app.patch('/api/rooms/:roomId/name', requireAuth, async (req, res) => {
 
     const result = await pool.query(
       `
-      UPDATE rooms
-      SET name = $1
-      WHERE id = $2
-      RETURNING id, name, type, created_at
+      UPDATE room_members
+      SET custom_room_name = $1
+      WHERE room_id = $2
+        AND user_id = $3
+        AND left_at IS NULL
+      RETURNING room_id, custom_room_name
       `,
-      [name, roomId]
+      [name, roomId, req.user.id]
     );
 
-    const memberIds = await getActiveRoomMemberIds(roomId);
-
-    for (const memberId of memberIds) {
-      io.to(`user:${memberId}`).emit('rooms changed');
-    }
+    io.to(`user:${req.user.id}`).emit('rooms changed');
 
     return res.json({
       message: '채팅방 이름을 변경했습니다.',
       room: {
-        id: String(result.rows[0].id),
-        name: result.rows[0].name,
-        type: result.rows[0].type,
-        createdAt: result.rows[0].created_at
+        id: String(result.rows[0].room_id),
+        name: result.rows[0].custom_room_name
       }
     });
   } catch (e) {
