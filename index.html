@@ -4,6 +4,13 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1.0" />
     <title>Coconut Chat</title>
+    <!-- PWA 설정: 모바일 홈 화면에 추가했을 때 앱 이름, 아이콘, 테마색을 manifest.json에서 읽게 한다. -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#2aa8f2" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Coconut Chat" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
 
     <style>
       * {
@@ -308,6 +315,41 @@
         font-size: 0.85rem;
       }
 
+
+      .friend-code-row {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        color: #7b8794;
+        font-size: 0.85rem;
+      }
+
+      .friend-code-row #my-meta {
+        color: inherit;
+      }
+
+      #copy-friend-code-button {
+        width: 1.65rem;
+        height: 1.65rem;
+        display: inline-grid;
+        place-items: center;
+        border: 0;
+        border-radius: 999px;
+        background: transparent;
+        color: inherit;
+        padding: 0;
+        cursor: pointer;
+      }
+
+      #copy-friend-code-button:hover {
+        background: rgba(23, 32, 42, 0.08);
+      }
+
+      #copy-friend-code-button svg {
+        width: 1rem;
+        height: 1rem;
+        stroke: currentColor;
+      }
       .view {
         display: none;
         padding: 1rem 1rem 8rem;
@@ -1201,7 +1243,17 @@
 
           <div>
             <strong id="my-nickname">로그인 전</strong>
-            <div id="my-meta">친구 코드: -</div>
+            <div class="friend-code-row">
+              <span id="my-meta">친구 코드: -</span>
+
+              <!-- 친구 코드 복사 버튼. currentColor를 써서 주변 글자색과 자연스럽게 맞춘다. -->
+              <button id="copy-friend-code-button" type="button" title="친구 코드 복사" aria-label="친구 코드 복사">
+                <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="9" y="9" width="13" height="13" rx="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -1412,6 +1464,7 @@
       const myProfileImage = document.getElementById('my-profile-image');
       const myNickname = document.getElementById('my-nickname');
       const myMeta = document.getElementById('my-meta');
+      const copyFriendCodeButton = document.getElementById('copy-friend-code-button');
       const logoutButton = document.getElementById('logout-button');
 
       const friendCodeInput = document.getElementById('friend-code-input');
@@ -1546,6 +1599,35 @@
           .toUpperCase();
 
         renderProfileImage(currentUser.profileImage);
+      }
+
+      // 내 친구 코드를 클립보드에 복사한다.
+      // 서버 요청 없이 브라우저에서만 처리되는 가벼운 UI 기능이다.
+      async function copyMyFriendCode() {
+        if (!currentUser || !currentUser.friendCode) {
+          setPageMessage('복사할 친구 코드가 없습니다.');
+          return;
+        }
+
+        try {
+          await navigator.clipboard.writeText(currentUser.friendCode);
+          setPageMessage('친구 코드를 복사했습니다.', true);
+        } catch (e) {
+          // 일부 브라우저나 file:/// 실행 환경에서는 Clipboard API가 막힐 수 있어서 예전 방식으로 한 번 더 시도한다.
+          const tempInput = document.createElement('input');
+          tempInput.value = currentUser.friendCode;
+          document.body.appendChild(tempInput);
+          tempInput.select();
+
+          const copied = document.execCommand('copy');
+          document.body.removeChild(tempInput);
+
+          if (copied) {
+            setPageMessage('친구 코드를 복사했습니다.', true);
+          } else {
+            setPageMessage('친구 코드 복사에 실패했습니다.');
+          }
+        }
       }
 
       function showView(viewId) {
@@ -2642,6 +2724,7 @@
         }
       });
 
+      copyFriendCodeButton.addEventListener('click', copyMyFriendCode);
       addFriendButton.addEventListener('click', addFriendByCode);
 
       newChatButton.addEventListener('click', () => {
@@ -2721,6 +2804,13 @@
         });
       });
 
+      // PWA 등록: file:///로 열 때는 서비스워커가 동작하지 않으므로 서버 주소에서만 등록한다.
+      // 로컬에서는 http://localhost:3000, 배포 후에는 Render의 https 주소에서 설치 가능해진다.
+      if ('serviceWorker' in navigator && window.location.protocol !== 'file:') {
+        navigator.serviceWorker.register('/service-worker.js').catch((e) => {
+        console.error('service worker registration failed:', e);
+       });
+      }
       loadMe();
     </script>
   </body>
