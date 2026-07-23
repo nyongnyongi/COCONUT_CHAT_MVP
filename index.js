@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const { Server } = require('socket.io');
 const { Pool } = require('pg');
 const bcrypt = require('bcrypt');
+const webpush = require('web-push');
 
 if (process.env.NODE_ENV !== 'production') {
   require('dotenv').config();
@@ -24,6 +25,17 @@ const pool = new Pool({
 });
 
 const io = new Server(server);
+
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
+
+if (vapidPublicKey && vapidPrivateKey) {
+  webpush.setVapidDetails(
+    process.env.VAPID_SUBJECT || 'mailto:coconut-chat@example.com',
+    vapidPublicKey,
+    vapidPrivateKey
+  );
+}
 
 function getTokenSecret() {
   return process.env.SESSION_SECRET || process.env.DATABASE_URL;
@@ -258,6 +270,90 @@ function emitUserStateChanged(userId) {
   io.to(`user:${userId}`).emit('rooms changed');
 }
 
+function isPushConfigured() {
+  return Boolean(vapidPublicKey && vapidPrivateKey);
+}
+
+async function getUnreadRoomCountForUser(userId) {
+  const result = await pool.query(
+    `
+    SELECT COALESCE(SUM(unread_count), 0) AS total_unread_count
+    FROM (
+      SELECT
+        COUNT(msg.id) FILTER (
+          WHERE msg.id > COALESCE(rm.last_read_message_id, 0)
+            AND msg.sender_id <> $1
+            AND msg.deleted_for_everyone = false
+        ) AS unread_count
+      FROM rooms r
+      JOIN room_members rm ON rm.room_id = r.id
+      LEFT JOIN room_messages msg ON msg.room_id = r.id
+      WHERE rm.user_id = $1
+        AND rm.left_at IS NULL
+      GROUP BY r.id, rm.last_read_message_id
+    ) unread_rooms
+    `,
+    [userId]
+  );
+
+  return Number(result.rows[0]?.total_unread_count || 0);
+}
+
+async function sendUnreadPushToUsers(userIds) {
+  if (!isPushConfigured() || userIds.length === 0) {
+    return;
+  }
+
+  const uniqueUserIds = [...new Set(userIds.map(String))];
+
+  for (const userId of uniqueUserIds) {
+    const totalUnreadCount = await getUnreadRoomCountForUser(userId);
+
+    if (totalUnreadCount <= 0) {
+      continue;
+    }
+
+    const subscriptions = await pool.query(
+      `
+      SELECT id, endpoint, p256dh, auth
+      FROM push_subscriptions
+      WHERE user_id = $1
+      `,
+      [userId]
+    );
+
+    const payload = JSON.stringify({
+      title: 'Coconut Chat',
+      body: `안 읽은 메시지 ${totalUnreadCount}개`,
+      unreadCount: totalUnreadCount
+    });
+
+    for (const subscription of subscriptions.rows) {
+      try {
+        await webpush.sendNotification(
+          {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.p256dh,
+              auth: subscription.auth
+            }
+          },
+          payload
+        );
+      } catch (e) {
+        if (e.statusCode === 404 || e.statusCode === 410) {
+          await pool.query(
+            'DELETE FROM push_subscriptions WHERE id = $1',
+            [subscription.id]
+          );
+        } else {
+          console.error('push send error:', e);
+        }
+      }
+    }
+  }
+}
+
 async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -330,6 +426,17 @@ async function initDb() {
       user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
       deleted_at TIMESTAMPTZ DEFAULT now(),
       PRIMARY KEY (message_id, user_id)
+    );
+  `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS push_subscriptions (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT REFERENCES users(id) ON DELETE CASCADE,
+      endpoint TEXT UNIQUE NOT NULL,
+      p256dh TEXT NOT NULL,
+      auth TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT now()
     );
   `);
 
@@ -454,6 +561,51 @@ app.get('/api/me', requireAuth, async (req, res) => {
   return res.json({
     user: toPublicUser(req.user)
   });
+});
+
+app.get('/api/push/public-key', requireAuth, async (req, res) => {
+  return res.json({
+    publicKey: vapidPublicKey,
+    enabled: isPushConfigured()
+  });
+});
+
+app.post('/api/push/subscription', requireAuth, async (req, res) => {
+  const subscription = req.body.subscription;
+  const endpoint = String(subscription?.endpoint || '').trim();
+  const p256dh = String(subscription?.keys?.p256dh || '').trim();
+  const auth = String(subscription?.keys?.auth || '').trim();
+
+  if (!endpoint || !p256dh || !auth) {
+    return res.status(400).json({
+      message: '푸시 구독 정보가 올바르지 않습니다.'
+    });
+  }
+
+  try {
+    await pool.query(
+      `
+      INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth)
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (endpoint)
+      DO UPDATE SET
+        user_id = EXCLUDED.user_id,
+        p256dh = EXCLUDED.p256dh,
+        auth = EXCLUDED.auth
+      `,
+      [req.user.id, endpoint, p256dh, auth]
+    );
+
+    return res.json({
+      message: '푸시 알림을 등록했습니다.'
+    });
+  } catch (e) {
+    console.error('push subscription save error:', e);
+
+    return res.status(500).json({
+      message: '푸시 알림 등록 실패'
+    });
+  }
 });
 
 app.patch('/api/me/nickname', requireAuth, async (req, res) => {
@@ -1136,7 +1288,10 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
       `
       SELECT
         r.id,
-        r.name,
+        CASE
+          WHEN r.type = 'direct' THEN COALESCE(other_user.nickname, other_user.username, r.name)
+          ELSE r.name
+        END AS display_name,
         r.type,
         r.created_at,
         COALESCE(MAX(msg.id), 0) AS last_message_id,
@@ -1155,10 +1310,17 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
         ) AS last_message
       FROM rooms r
       JOIN room_members rm ON rm.room_id = r.id
+      LEFT JOIN room_members other_member
+        ON other_member.room_id = r.id
+        AND r.type = 'direct'
+        AND other_member.user_id <> $1
+        AND other_member.left_at IS NULL
+      LEFT JOIN users other_user
+        ON other_user.id = other_member.user_id
       LEFT JOIN room_messages msg ON msg.room_id = r.id
       WHERE rm.user_id = $1
         AND rm.left_at IS NULL
-      GROUP BY r.id, rm.last_read_message_id
+      GROUP BY r.id, rm.last_read_message_id, other_user.nickname, other_user.username
       ORDER BY last_message_id DESC, r.created_at DESC
       `,
       [req.user.id]
@@ -1167,7 +1329,7 @@ app.get('/api/rooms', requireAuth, async (req, res) => {
     return res.json({
       rooms: result.rows.map((room) => ({
         id: String(room.id),
-        name: room.name,
+        name: room.display_name,
         type: room.type,
         unreadCount: Number(room.unread_count || 0),
         lastMessage: room.last_message || '',
@@ -1634,6 +1796,14 @@ io.on('connection', async (socket) => {
       for (const memberId of memberIds) {
         io.to(`user:${memberId}`).emit('rooms changed');
       }
+
+      const pushTargetIds = memberIds.filter((memberId) => {
+        return String(memberId) !== String(socket.user.id);
+      });
+
+      sendUnreadPushToUsers(pushTargetIds).catch((e) => {
+        console.error('push dispatch error:', e);
+      });
 
       callback?.({
         ok: true,
