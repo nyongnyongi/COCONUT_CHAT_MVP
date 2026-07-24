@@ -329,6 +329,8 @@ async function sendUnreadPushToUsers(userIds) {
       [userId]
     );
 
+    console.log(`[push] user=${userId} unread=${totalUnreadCount} subscriptions=${subscriptions.rows.length}`);
+
     const payload = JSON.stringify({
       title: 'Coconut Chat',
       body: `안 읽은 메시지 ${totalUnreadCount}개`,
@@ -337,6 +339,7 @@ async function sendUnreadPushToUsers(userIds) {
 
     for (const subscription of subscriptions.rows) {
       try {
+        console.log(`[push] sending to endpoint=${subscription.endpoint}`);
         await webpush.sendNotification(
           {
             endpoint: subscription.endpoint,
@@ -347,7 +350,9 @@ async function sendUnreadPushToUsers(userIds) {
           },
           payload
         );
+        console.log(`[push] delivered to endpoint=${subscription.endpoint}`);
       } catch (e) {
+        console.error(`[push] failed endpoint=${subscription.endpoint} error=${e.message || e}`);
         if (e.statusCode === 404 || e.statusCode === 410) {
           await pool.query(
             'DELETE FROM push_subscriptions WHERE id = $1',
