@@ -44,21 +44,37 @@ self.addEventListener('push', (event) => {
   const body = payload.body || '새 메시지가 도착했습니다.';
   const unreadCount = Number(payload.unreadCount || payload.count || 0);
 
-  if ('setAppBadge' in self.registration) {
-    event.waitUntil(self.registration.setAppBadge(unreadCount));
-  }
-
   event.waitUntil(
-    self.registration.showNotification(title, {
-      body,
-      icon: payload.icon || '/icon-192.png',
-      badge: payload.badge || '/icon-192.png',
-      tag: 'coconut-chat',
-      renotify: true,
-      data: {
-        url: payload.url || '/'
+    (async () => {
+      if ('setAppBadge' in self.registration) {
+        await self.registration.setAppBadge(unreadCount).catch(() => {});
       }
-    })
+
+      const clientsList = await self.clients.matchAll({
+        type: 'window',
+        includeUncontrolled: true
+      });
+
+      clientsList.forEach((client) => {
+        client.postMessage({
+          type: 'PUSH_RECEIVED',
+          count: unreadCount,
+          title,
+          body
+        });
+      });
+
+      await self.registration.showNotification(title, {
+        body,
+        icon: payload.icon || '/icon-192.png',
+        badge: payload.badge || '/icon-192.png',
+        tag: 'coconut-chat',
+        renotify: true,
+        data: {
+          url: payload.url || '/'
+        }
+      });
+    })()
   );
 });
 
