@@ -575,7 +575,7 @@ app.get('/api/push/public-key', requireAuth, async (req, res) => {
   });
 });
 
-app.post('/api/push/subscription', requireAuth, async (req, res) => {
+app.post(['/api/push/subscription', '/api/push/subscriptions'], requireAuth, async (req, res) => {
   const subscription = req.body.subscription;
   const endpoint = String(subscription?.endpoint || '').trim();
   const p256dh = String(subscription?.keys?.p256dh || '').trim();
