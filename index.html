@@ -1793,12 +1793,21 @@ function updateAppBadgeDisplay(count) {
 }
 
 async function registerPushNotifications() {
+  const isSecureContext =
+    window.isSecureContext ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1';
+
   if (
     !loginToken ||
     !('serviceWorker' in navigator) ||
     !('PushManager' in window) ||
-    window.location.protocol === 'file:'
+    window.location.protocol === 'file:' ||
+    !isSecureContext
   ) {
+    if (!isSecureContext) {
+      setPageMessage('모바일 푸시 알림은 HTTPS 또는 localhost에서만 동작합니다. 서버를 HTTPS로 배포한 뒤 다시 시도해 주세요.', false);
+    }
     return;
   }
 
@@ -1819,8 +1828,12 @@ async function registerPushNotifications() {
 
     const { publicKey } = await keyResponse.json();
 
+    console.log('Registering service worker...');
     const registration = await navigator.serviceWorker.register('/service-worker.js');
+    console.log('Service worker registered:', registration);
+
     const serviceWorkerReady = await navigator.serviceWorker.ready;
+    console.log('Service worker ready:', serviceWorkerReady);
 
     if (serviceWorkerReady.active) {
       serviceWorkerReady.active.postMessage({ type: 'CLEAR_BADGE' });
@@ -1830,6 +1843,7 @@ async function registerPushNotifications() {
 
     const existingSubscription =
       await registration.pushManager.getSubscription();
+    console.log('Existing subscription:', existingSubscription);
 
     const subscription =
       existingSubscription ||
@@ -1837,6 +1851,8 @@ async function registerPushNotifications() {
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey)
       }));
+
+    console.log('Push subscription created:', subscription);
 
     const saveResponse = await authFetch('/api/push/subscriptions', {
       method: 'POST',

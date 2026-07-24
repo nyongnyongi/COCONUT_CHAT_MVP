@@ -26,8 +26,15 @@ const pool = new Pool({
 
 const io = new Server(server);
 
-const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
+let vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+let vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
+
+if (!vapidPublicKey || !vapidPrivateKey) {
+  const generatedKeys = webpush.generateVAPIDKeys();
+  vapidPublicKey = generatedKeys.publicKey;
+  vapidPrivateKey = generatedKeys.privateKey;
+  console.log('VAPID keys were missing; generated temporary keys for push notifications.');
+}
 
 if (vapidPublicKey && vapidPrivateKey) {
   webpush.setVapidDetails(
