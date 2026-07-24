@@ -1797,10 +1797,12 @@ async function registerPushNotifications() {
 
     const { publicKey } = await keyResponse.json();
 
-    // 핵심 수정:
-    // navigator.serviceWorker.ready만 기다리지 말고,
-    // 여기서 직접 service-worker.js를 등록한 뒤 그 registration을 바로 사용한다.
     const registration = await navigator.serviceWorker.register('/service-worker.js');
+    const serviceWorkerReady = await navigator.serviceWorker.ready;
+
+    if (serviceWorkerReady.active) {
+      serviceWorkerReady.active.postMessage({ type: 'CLEAR_BADGE' });
+    }
 
     const existingSubscription =
       await registration.pushManager.getSubscription();
